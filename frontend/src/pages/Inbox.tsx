@@ -208,20 +208,8 @@ function BolReview({
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const create = useMutation({
-    mutationFn: async () => {
-      const fields = payloadFromDraft(draft);
-      const created = await api.createLoadFromInbox(item.id, {
-        reference: fields.reference,
-        customer_rate: fields.customer_rate,
-        carrier_rate: fields.carrier_rate,
-        notes: fields.notes,
-        customer_name: fields.customer_name,
-        customer_contact_name: fields.customer_contact_name,
-        customer_email: fields.customer_email,
-        customer_phone: fields.customer_phone,
-      });
-      return api.patchLoad(created.id, fields);
-    },
+    mutationFn: () =>
+      api.createLoadFromInbox(item.id, payloadFromDraft(draft)),
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["inbox"] }),

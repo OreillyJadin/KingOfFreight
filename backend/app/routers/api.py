@@ -468,7 +468,7 @@ def send_checkin_now(
     )
     if checkin is None:
         raise HTTPException(status_code=404, detail="Check-in not found")
-    if checkin.state != "scheduled":
+    if checkin.state not in {"scheduled", "no_reply"}:
         raise HTTPException(status_code=409, detail="Check-in has already been handled")
     body = checkin.message_text or render_checkin(checkin.load, checkin.kind)
     send_outbound(
@@ -485,6 +485,8 @@ def send_checkin_now(
     checkin.message_text = body
     checkin.checkin_sent_at = utcnow()
     checkin.state = "sent"
+    checkin.alert_raised_at = None
+    checkin.alert_dismissed_at = None
     db.commit()
     db.refresh(checkin)
     return _orm_values(checkin)
@@ -527,6 +529,9 @@ def alerts(db: Session = Depends(get_db)) -> list[dict]:
             "id": item.id,
             "kind": item.kind,
             "state": item.state,
+            "checkin_sent_at": item.checkin_sent_at,
+            "scheduled_time": item.scheduled_time,
+            "reply_raw_text": item.reply_raw_text,
             "parsed_status": item.parsed_status,
             "parsed_summary": item.parsed_summary,
             "needs_broker_attention": item.needs_broker_attention,
@@ -633,6 +638,7 @@ def create_load_from_inbox(
         or extracted.get("reference")
         or next(iter(references.values()), None)
     )
+    overrides.pop("status", None)
     reference = reference or f"BOL-{communication.id}"
     fields = {
         key: extracted.get(key)
@@ -656,6 +662,7 @@ def create_load_from_inbox(
             "customer_phone",
         )
     }
+    fields.update(overrides)
     for key in ("pickup_datetime", "delivery_datetime"):
         if fields[key]:
             value = (
@@ -664,7 +671,6 @@ def create_load_from_inbox(
                 else fields[key]
             )
             fields[key] = _to_local_aware(value)
-    fields.update(overrides)
     load = Load(
         reference=reference,
         status="new",

@@ -148,6 +148,9 @@ export type Alert = {
   id: number;
   kind: "pickup" | "dropoff";
   state: "no_reply" | "replied";
+  checkin_sent_at: string | null;
+  scheduled_time: string;
+  reply_raw_text: string | null;
   parsed_status: string | null;
   parsed_summary: string | null;
   needs_broker_attention: boolean;

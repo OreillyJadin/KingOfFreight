@@ -168,15 +168,14 @@ class TrackingPing(BaseModel):
     accuracy_m: float | None = Field(default=None, ge=0)
 
 
-class CreateLoadOverrides(BaseModel):
+class CreateLoadOverrides(LoadCreate):
     reference: str | None = None
-    customer_rate: Decimal | None = None
-    carrier_rate: Decimal | None = None
-    notes: str | None = None
-    customer_name: str | None = None
-    customer_contact_name: str | None = None
-    customer_email: str | None = None
-    customer_phone: str | None = None
+    status: (
+        Literal[
+            "new", "posted", "booked", "picked_up", "in_transit", "delayed", "delivered"
+        ]
+        | None
+    ) = None
 
 
 class SimulateSms(BaseModel):

@@ -69,9 +69,7 @@ if settings.env == "development":
     app.include_router(dev_public)
 
 
-def mount_frontend(
-    application: FastAPI, dist_dir: Path = FRONTEND_DIST
-) -> None:
+def mount_frontend(application: FastAPI, dist_dir: Path = FRONTEND_DIST) -> None:
     if not dist_dir.is_dir() or not (dist_dir / "index.html").is_file():
         return
     asset_dir = dist_dir / "assets"

@@ -53,11 +53,16 @@ function AttentionStrip() {
     queryFn: api.alerts,
     refetchInterval: 30_000,
   });
-  const checkins = useQuery({
-    queryKey: ["alert-checkins", (alerts.data ?? []).map((item) => item.id)],
-    queryFn: () => Promise.all((alerts.data ?? []).map((item) => api.checkin(item.id))),
-    enabled: Boolean(alerts.data?.length),
-    refetchInterval: 30_000,
+  const resend = useMutation({
+    mutationFn: api.sendCheckin,
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["alerts"] }),
+        queryClient.invalidateQueries({ queryKey: ["loads"] }),
+      ]);
+      showToast("Check-in sent again.");
+    },
+    onError: (error: Error) => showToast(error.message, "error"),
   });
   const dismiss = useMutation({
     mutationFn: api.dismissAlert,
@@ -79,15 +84,13 @@ function AttentionStrip() {
         </span>
       </div>
       <div className="divide-y divide-amber-200/60">
-        {alerts.data.map((alert, index) => {
-          const checkin = checkins.data?.[index];
-          return (
+        {alerts.data.map((alert) => (
             <div key={alert.id} className="flex flex-col gap-3 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-bold text-amber-950">
                     {alert.state === "no_reply"
-                      ? `No reply to ${alert.kind} check-in sent ${formatClock(checkin?.checkin_sent_at)}`
+                      ? `No reply to ${alert.kind} check-in sent ${formatClock(alert.checkin_sent_at)}`
                       : `${alert.load.reference} · ${alert.parsed_status ?? "Unclear"} reply`}
                   </span>
                   <StatusBadge status={alert.load.status} />
@@ -95,20 +98,20 @@ function AttentionStrip() {
                 <p className="mt-1 line-clamp-2 text-sm text-amber-900/80">
                   {alert.state === "no_reply"
                     ? `${alert.load.reference} · ${alert.kind} check-in`
-                    : alert.parsed_summary || "Driver reply needs review."}
+                    : alert.reply_raw_text || alert.parsed_summary || "Driver reply needs review."}
                 </p>
-                {checkin?.reply_raw_text && (
+                {alert.state === "replied" && alert.reply_raw_text && (
                   <p className="mt-1 text-xs text-amber-900/70">
-                    Driver wrote: “{checkin.reply_raw_text}”
+                    Driver wrote: “{alert.reply_raw_text}”
                   </p>
                 )}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {alert.state === "no_reply" && (
                   <button
-                    disabled
-                    title="The API only permits send-now for scheduled check-ins."
-                    className="min-h-10 rounded-lg border border-amber-300 bg-white/70 px-3 text-xs font-bold text-amber-900 opacity-60"
+                    onClick={() => resend.mutate(alert.id)}
+                    disabled={resend.isPending}
+                    className="min-h-10 rounded-lg border border-amber-300 bg-white/70 px-3 text-xs font-bold text-amber-900 hover:bg-amber-100 disabled:opacity-60"
                   >
                     Send check-in again
                   </button>
@@ -129,8 +132,7 @@ function AttentionStrip() {
                 </Link>
               </div>
             </div>
-          );
-        })}
+        ))}
       </div>
     </section>
   );

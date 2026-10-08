@@ -1,9 +1,13 @@
 import base64
 import json
+from datetime import datetime, timezone
+from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 
-from app.models import Communication, Load
+from app.config import get_settings
+from app.models import Communication, Load, ScheduledCheckIn, utcnow
 
 
 def test_auth_public_routes_and_twilio_signature(client, db, load_data, monkeypatch):
@@ -127,6 +131,71 @@ def test_bol_upload_and_create_load(client, db):
     assert linked.archived and linked.load_id == created.json()["id"]
 
 
+def test_send_now_resends_no_reply_checkin_and_clears_alert(
+    client, db, load_data, providers
+):
+    load, _ = load_data
+    now = utcnow()
+    checkin = ScheduledCheckIn(
+        load_id=load.id,
+        kind="pickup",
+        scheduled_time=now,
+        send_at=now,
+        checkin_sent_at=now,
+        checkin_channel="sms",
+        driver_contact="+15551234567",
+        state="no_reply",
+        alert_raised_at=now,
+        alert_dismissed_at=now,
+    )
+    db.add(checkin)
+    db.commit()
+
+    response = client.post(f"/api/checkins/{checkin.id}/send-now")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["state"] == "sent"
+    assert response.json()["checkin_sent_at"]
+    assert response.json()["alert_raised_at"] is None
+    assert response.json()["alert_dismissed_at"] is None
+    assert providers["sms"].sent == [("+15551234567", response.json()["message_text"])]
+    communication = db.scalar(
+        select(Communication).where(
+            Communication.load_id == load.id,
+            Communication.direction == "outbound",
+            Communication.tag == "checkin",
+        )
+    )
+    assert communication is not None
+    assert communication.content == response.json()["message_text"]
+
+
+def test_send_now_rejects_replied_and_skipped_checkins(
+    client, db, load_data, providers
+):
+    load, _ = load_data
+    now = utcnow()
+    checkins = [
+        ScheduledCheckIn(
+            load_id=load.id,
+            kind="pickup",
+            scheduled_time=now,
+            send_at=now,
+            checkin_channel="sms",
+            driver_contact="+15551234567",
+            state=state,
+        )
+        for state in ("replied", "skipped")
+    ]
+    db.add_all(checkins)
+    db.commit()
+
+    for checkin in checkins:
+        response = client.post(f"/api/checkins/{checkin.id}/send-now")
+        assert response.status_code == 409
+    assert providers["sms"].sent == []
+
+
 def test_carrier_verify_prefix_and_post_text(client, db, load_data):
     load, _ = load_data
     response = client.post("/api/carriers/verify", json={"mc_number": "MC-123456"})
@@ -156,8 +225,29 @@ def test_bol_create_load_field_overrides(client):
     ).json()
     response = client.post(
         f"/api/inbox/{uploaded['id']}/create-load",
-        json={"reference": "CUSTOM-REF", "customer_name": "Override Customer"},
+        json={
+            "reference": "CUSTOM-REF",
+            "pickup_city": "Madison",
+            "pickup_datetime": "2025-01-02T09:00:00",
+            "weight_lbs": 12345,
+            "commodity": "Frozen",
+            "customer_name": "Override Customer",
+            "customer_rate": "2500",
+            "driver_name": "Casey",
+        },
     )
     assert response.status_code == 201
-    assert response.json()["reference"] == "CUSTOM-REF"
-    assert response.json()["customer_name"] == "Override Customer"
+    load = response.json()
+    assert load["status"] == "new"
+    assert load["reference"] == "CUSTOM-REF"
+    assert load["pickup_city"] == "Madison"
+    expected_pickup = datetime(2025, 1, 2, 9).replace(
+        tzinfo=ZoneInfo(get_settings().broker_timezone)
+    )
+    expected_pickup = expected_pickup.astimezone(timezone.utc).replace(tzinfo=None)
+    assert datetime.fromisoformat(load["pickup_datetime"]) == expected_pickup
+    assert Decimal(load["weight_lbs"]) == Decimal("12345")
+    assert load["commodity"] == "Frozen"
+    assert load["customer_name"] == "Override Customer"
+    assert Decimal(load["customer_rate"]) == Decimal("2500")
+    assert load["driver_name"] == "Casey"

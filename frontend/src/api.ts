@@ -97,8 +97,6 @@ export const api = {
     ),
   verifyCarrier: (mc_number: string) =>
     request<Carrier>("/carriers/verify", json("POST", { mc_number })),
-  checkin: (id: number) =>
-    request<LoadDetail["checkins"][number]>(`/checkins/${id}`),
   sendCheckin: (id: number) =>
     request<LoadDetail["checkins"][number]>(
       `/checkins/${id}/send-now`,

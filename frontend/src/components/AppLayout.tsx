@@ -29,12 +29,6 @@ function AlertsPanel({
   pending: StatusUpdate[];
   onClose: () => void;
 }) {
-  const alertQueries = useQuery({
-    queryKey: ["alert-checkins", alerts.map((item) => item.id)],
-    queryFn: () => Promise.all(alerts.map((item) => api.checkin(item.id))),
-    enabled: alerts.length > 0,
-    refetchInterval: 30_000,
-  });
   return (
     <div className="absolute right-0 top-14 z-40 w-[min(92vw,390px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
       <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
@@ -53,9 +47,7 @@ function AlertsPanel({
         </button>
       </div>
       <div className="max-h-[60vh] overflow-y-auto p-2">
-        {alerts.map((alert, index) => {
-          const checkin = alertQueries.data?.[index];
-          return (
+        {alerts.map((alert) => (
             <NavLink
               to={`/status?load=${alert.load.id}`}
               onClick={onClose}
@@ -64,15 +56,14 @@ function AlertsPanel({
             >
               <p className="text-sm font-semibold text-slate-800">
                 {alert.state === "no_reply"
-                  ? `No reply to ${alert.kind} check-in sent ${formatClock(checkin?.checkin_sent_at)}`
+                  ? `No reply to ${alert.kind} check-in sent ${formatClock(alert.checkin_sent_at)}`
                   : `${alert.parsed_status ?? "Unclear"} reply · ${alert.load.reference}`}
               </p>
               <p className="mt-1 line-clamp-2 text-xs text-slate-500">
-                {alert.parsed_summary || `${alert.load.reference} · ${alert.kind} check-in`}
+                {alert.reply_raw_text || alert.parsed_summary || `${alert.load.reference} · ${alert.kind} check-in`}
               </p>
             </NavLink>
-          );
-        })}
+        ))}
         {pending.map((item) => (
           <NavLink
             to={`/status?load=${item.load_id}`}

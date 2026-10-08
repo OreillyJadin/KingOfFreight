@@ -224,8 +224,10 @@ def test_alerts_exclude_checkins_passed_by_current_load_status(client, db, load_
         kind="dropoff",
         scheduled_time=utcnow(),
         send_at=utcnow(),
+        checkin_sent_at=utcnow(),
         checkin_channel="sms",
         driver_contact="+15551234567",
+        reply_raw_text="Still waiting",
         state="no_reply",
         alert_raised_at=utcnow(),
     )
@@ -234,6 +236,10 @@ def test_alerts_exclude_checkins_passed_by_current_load_status(client, db, load_
 
     alerts = client.get("/api/alerts").json()
     assert {alert["id"] for alert in alerts} == {dropoff.id}
+    dropoff_alert = alerts[0]
+    assert dropoff_alert["checkin_sent_at"]
+    assert dropoff_alert["scheduled_time"]
+    assert dropoff_alert["reply_raw_text"] == "Still waiting"
 
     load.status = "delivered"
     db.commit()
