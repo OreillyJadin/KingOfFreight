@@ -73,6 +73,34 @@ def test_password_change_invalidates_existing_session(monkeypatch):
         get_settings.cache_clear()
 
 
+def test_frontend_static_serving_has_spa_fallback_without_shadowing_api(tmp_path):
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from app.main import mount_frontend
+
+    dist = tmp_path / "dist"
+    assets = dist / "assets"
+    assets.mkdir(parents=True)
+    index_html = "<!doctype html><title>KingOfFreight</title>"
+    (dist / "index.html").write_text(index_html)
+    (assets / "app.js").write_text("console.log('frontend')")
+
+    test_app = FastAPI()
+
+    @test_app.get("/api/ping")
+    def ping():
+        return {"ok": True}
+
+    mount_frontend(test_app, dist)
+    client = TestClient(test_app)
+    assert client.get("/").text == index_html
+    assert client.get("/status").text == index_html
+    assert client.get("/assets/app.js").text == "console.log('frontend')"
+    assert client.get("/api/ping").json() == {"ok": True}
+    assert client.get("/api/not-found").status_code == 404
+
+
 def test_bol_upload_and_create_load(client, db):
     response = client.post(
         "/api/bol/upload",

@@ -1,8 +1,11 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.config import get_settings
 from app.db import SessionLocal
@@ -14,6 +17,7 @@ from app.services.checkins import run_checkin_tick
 
 settings = get_settings()
 scheduler = BackgroundScheduler(timezone="UTC")
+FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
 
 def _run_tick() -> None:
@@ -65,6 +69,31 @@ if settings.env == "development":
     app.include_router(dev_public)
 
 
+def mount_frontend(
+    application: FastAPI, dist_dir: Path = FRONTEND_DIST
+) -> None:
+    if not dist_dir.is_dir() or not (dist_dir / "index.html").is_file():
+        return
+    asset_dir = dist_dir / "assets"
+    if asset_dir.is_dir():
+        application.mount(
+            "/assets", StaticFiles(directory=asset_dir), name="frontend-assets"
+        )
+
+    @application.get("/{frontend_path:path}", include_in_schema=False)
+    def serve_frontend(frontend_path: str) -> FileResponse:
+        if frontend_path == "api" or frontend_path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="Not Found")
+        root = dist_dir.resolve()
+        target = (root / frontend_path).resolve()
+        if root not in target.parents and target != root:
+            raise HTTPException(status_code=404, detail="Not Found")
+        return FileResponse(target if target.is_file() else root / "index.html")
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+mount_frontend(app)

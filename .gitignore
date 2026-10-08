@@ -7,3 +7,5 @@ __pycache__/
 data/uploads/
 data/*.sqlite
 backend/data/
+node_modules/
+frontend/dist/

@@ -1,12 +1,11 @@
 # KingOfFreight
 
-Phase-1 single-broker freight operations backend. The frontend is intentionally
-not included in this repository handoff.
+Phase-1 single-broker freight operations app for a single freight broker.
 
 ## Run locally
 
-Requirements: Python 3.10, Docker with Compose, and (for local non-container
-execution) a PostgreSQL 16 server.
+Requirements: Python 3.10, Node.js 20 with npm, Docker with Compose, and (for
+local non-container execution) a PostgreSQL server.
 
 ```sh
 cp .env.example .env
@@ -20,16 +19,35 @@ python -m scripts.seed
 uvicorn app.main:app --reload
 ```
 
+In a second terminal, start the Vite frontend:
+
+```sh
+cd frontend
+npm ci
+npm run dev
+```
+
+Open `http://localhost:5173`. Vite proxies `/api` to the backend on port 8000 so
+the signed session cookie remains same-origin.
+
 Run the app as a single Uvicorn worker and a single instance. The in-process
 scheduler would otherwise run duplicate check-in jobs and double-send messages.
 
-Alternatively, run `docker compose up --build` from the repository root. The
-backend container applies Alembic migrations before starting Uvicorn. To seed
+For the integrated production-style service, run `docker compose up --build`
+from the repository root. The multi-stage image builds the React app and serves
+it from FastAPI, applies Alembic migrations, and then starts Uvicorn. To seed
 the container database separately, run:
 
 ```sh
 docker compose exec backend python -m scripts.seed
 ```
+
+The same image can be deployed as a single container service on Railway or
+Render. Build it from the repository root with
+`docker build -f backend/Dockerfile -t kingoffreight .`; set `DATABASE_URL`,
+`BROKER_PASSWORD`, and `SECRET_KEY` in the service environment. The container
+uses the platform `PORT` value when provided and serves both the API and the
+built frontend.
 
 The demo broker password is `changeme`; replace it before exposing the service.
 The API is at `http://localhost:8000`, with health check `/health`. OpenAPI docs
@@ -92,6 +110,18 @@ not been verified against a live key. Use mock mode unless provider credentials
 and access have been configured.
 
 ## Tests and lint
+
+Frontend development checks:
+
+```sh
+cd frontend
+npm ci
+npm run lint
+npx tsc --noEmit
+npm run build
+```
+
+Backend tests and lint:
 
 ```sh
 cd backend

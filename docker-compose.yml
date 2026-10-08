@@ -16,7 +16,8 @@ services:
       retries: 10
   backend:
     build:
-      context: ./backend
+      context: .
+      dockerfile: backend/Dockerfile
     env_file:
       - path: .env
         required: false
@@ -31,7 +32,7 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./data/uploads:/app/data/uploads
+      - ./data/uploads:/app/backend/data/uploads
     depends_on:
       db:
         condition: service_healthy
