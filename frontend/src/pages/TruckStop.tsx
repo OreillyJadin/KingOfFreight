@@ -26,6 +26,7 @@ function BookingModal({
   onClose: () => void;
 }) {
   const queryClient = useQueryClient();
+  const settings = useQuery({ queryKey: ["settings"], queryFn: api.settings });
   const navigate = useNavigate();
   const { showToast } = useToast();
   const [mc, setMc] = useState("");
@@ -231,15 +232,18 @@ function BookingModal({
           </summary>
           <div className="grid gap-3 border-t border-slate-100 p-3 sm:grid-cols-2">
             <label>
-              <span className="mb-1.5 block text-xs font-semibold text-slate-600">Offset minutes (default 60)</span>
+              <span className="mb-1.5 block text-xs font-semibold text-slate-600">Offset minutes</span>
               <input
                 type="number"
                 min="0"
-                placeholder="60"
+                placeholder={String(settings.data?.checkin_offset_minutes ?? 60)}
                 value={form.checkin_offset_minutes}
                 onChange={(event) => change("checkin_offset_minutes", event.target.value)}
                 className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
               />
+              <span className="mt-1 block text-xs text-slate-500">
+                Default: {settings.data?.checkin_offset_minutes ?? 60} min
+              </span>
             </label>
             <label>
               <span className="mb-1.5 block text-xs font-semibold text-slate-600">Check-in channel</span>

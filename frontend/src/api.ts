@@ -1,6 +1,8 @@
 import type {
   Alert,
   BookPayload,
+  BrokerPrefs,
+  BrokerPrefsUpdate,
   Carrier,
   Communication,
   Load,
@@ -67,6 +69,9 @@ export const api = {
   logout: () => request<{ authenticated: boolean }>("/auth/logout", json("POST")),
   me: () =>
     request<{ authenticated: boolean; broker_timezone: string }>("/auth/me"),
+  settings: () => request<BrokerPrefs>("/settings"),
+  updateSettings: (partial: BrokerPrefsUpdate) =>
+    request<BrokerPrefs>("/settings", json("PUT", partial)),
   loads: (tab: "truckstop" | "delivery", includeDelivered = false) =>
     request<Load[]>(
       `/loads?tab=${tab}&include_delivered=${includeDelivered ? "true" : "false"}`,

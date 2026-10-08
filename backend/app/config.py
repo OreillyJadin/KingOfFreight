@@ -1,7 +1,8 @@
 from functools import lru_cache
+import os
 from pathlib import Path
 
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -18,7 +19,11 @@ class Settings(BaseSettings):
     broker_name: str = "Freight Broker"
     broker_company: str = "Freight Brokerage"
     broker_timezone: str = "America/Chicago"
-    public_base_url: str = "http://localhost:8000"
+    public_base_url: str = Field(
+        default_factory=lambda: os.environ.get(
+            "RENDER_EXTERNAL_URL", "http://localhost:8000"
+        )
+    )
     cors_origins: str = "http://localhost:5173"
     checkin_offset_minutes: int = 60
     no_reply_alert_minutes: int = 30
@@ -52,6 +57,15 @@ class Settings(BaseSettings):
     @classmethod
     def normalize_mode(cls, value: str) -> str:
         return value.lower()
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def normalize_database_url(cls, value: str) -> str:
+        if value.startswith("postgres://"):
+            return value.replace("postgres://", "postgresql+psycopg://", 1)
+        if value.startswith("postgresql://"):
+            return value.replace("postgresql://", "postgresql+psycopg://", 1)
+        return value
 
     @property
     def cors_origin_list(self) -> list[str]:

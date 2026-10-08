@@ -6,12 +6,12 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session, joinedload
 
-from app.config import get_settings
 from app.integrations.email import EmailProvider
 from app.integrations.llm import LlmProvider
 from app.integrations.sms import SmsProvider
 from app.models import Communication, Load, ScheduledCheckIn, StatusUpdate, utcnow
 from app.services.messaging import send_outbound
+from app.services.preferences import get_prefs
 from app.services.templates import render_checkin, render_status_message
 
 logger = logging.getLogger(__name__)
@@ -34,6 +34,7 @@ def run_checkin_tick(
     from app.integrations.sms import get_sms_provider
 
     current = now or utcnow()
+    prefs = get_prefs(db)
     sms = sms or get_sms_provider()
     email = email or get_email_provider()
     due = (
@@ -83,7 +84,7 @@ def run_checkin_tick(
             ScheduledCheckIn.state == "sent", ScheduledCheckIn.reply_received.is_(False)
         )
     ).all()
-    limit = get_settings().no_reply_alert_minutes
+    limit = prefs.no_reply_alert_minutes
     for checkin in sent:
         if checkin.checkin_sent_at and _aware(checkin.checkin_sent_at) + timedelta(
             minutes=limit
@@ -163,6 +164,7 @@ def handle_driver_reply(
         return None
 
     llm = llm or get_llm_provider()
+    prefs = get_prefs(db)
     load = match.load
     parsed = llm.parse_reply(
         body,
@@ -173,16 +175,14 @@ def handle_driver_reply(
             "lane": f"{load.pickup_city or ''}, {load.pickup_state or ''} to {load.delivery_city or ''}, {load.delivery_state or ''}",
             "scheduled_time": match.scheduled_time.isoformat(),
             "current_local_time": datetime.now(
-                ZoneInfo(get_settings().broker_timezone)
+                ZoneInfo(prefs.broker_timezone)
             ).isoformat(),
         },
     )
     parsed_eta = parsed.eta
     if parsed_eta is not None:
         if parsed_eta.tzinfo is None:
-            parsed_eta = parsed_eta.replace(
-                tzinfo=ZoneInfo(get_settings().broker_timezone)
-            )
+            parsed_eta = parsed_eta.replace(tzinfo=ZoneInfo(prefs.broker_timezone))
         parsed_eta = parsed_eta.astimezone(timezone.utc)
     match.reply_received = True
     match.reply_raw_text = body

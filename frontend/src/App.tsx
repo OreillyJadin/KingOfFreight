@@ -5,6 +5,7 @@ import AppLayout from "./components/AppLayout";
 import Inbox from "./pages/Inbox";
 import Login from "./pages/Login";
 import Status from "./pages/Status";
+import Settings from "./pages/Settings";
 import Tracking from "./pages/Tracking";
 import TruckStop from "./pages/TruckStop";
 import { setBrokerTimeZone } from "./utils";
@@ -26,6 +27,7 @@ function ProtectedApp() {
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/truckstop" element={<TruckStop />} />
         <Route path="/status" element={<Status />} />
+        <Route path="/settings" element={<Settings />} />
         <Route path="*" element={<Navigate to="/inbox" replace />} />
       </Routes>
     </AppLayout>

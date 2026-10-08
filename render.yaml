@@ -1,0 +1,40 @@
+services:
+  - type: web
+    name: kingoffreight
+    runtime: docker
+    plan: starter
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    numInstances: 1
+    disk:
+      name: bol-uploads
+      mountPath: /app/backend/data
+      sizeGB: 1
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: kingoffreight-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: BROKER_PASSWORD
+        sync: false
+      - key: ENV
+        value: production
+      - key: UPLOAD_DIR
+        value: /app/backend/data/uploads
+      - key: SCHEDULER_ENABLED
+        value: "true"
+
+databases:
+  - name: kingoffreight-db
+    databaseName: kingoffreight
+    user: freight
+    plan: 0.1c-256mb
+
+# Optional live-integration variables from backend/app/config.py:
+# SMS_PROVIDER, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER
+# EMAIL_PROVIDER, GRAPH_TENANT_ID, GRAPH_CLIENT_ID, GRAPH_CLIENT_SECRET, GRAPH_MAILBOX
+# LLM_PROVIDER, ANTHROPIC_API_KEY, ANTHROPIC_MODEL
+# FMCSA_PROVIDER, FMCSA_WEBKEY

@@ -42,12 +42,28 @@ the container database separately, run:
 docker compose exec backend python -m scripts.seed
 ```
 
-The same image can be deployed as a single container service on Railway or
-Render. Build it from the repository root with
-`docker build -f backend/Dockerfile -t kingoffreight .`; set `DATABASE_URL`,
-`BROKER_PASSWORD`, and `SECRET_KEY` in the service environment. The container
-uses the platform `PORT` value when provided and serves both the API and the
-built frontend.
+### Deploy on Render
+
+Connect this GitHub repository in Render, choose **New → Blueprint**, select the
+repository, set `BROKER_PASSWORD` when prompted, and deploy. The Blueprint
+creates a paid Render Postgres database, a single always-on web instance, and a
+persistent disk for uploaded BOL PDFs. It builds the frontend into the backend
+Docker image and runs Alembic migrations at startup.
+
+After deployment, configure the Twilio inbound SMS webhook as
+`https://<render-url>/api/webhooks/twilio/sms`. To enable live integrations,
+add the provider credentials under the web service's Environment settings:
+`TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER`,
+`GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `GRAPH_MAILBOX`,
+`ANTHROPIC_API_KEY`, and `FMCSA_WEBKEY`, along with the corresponding provider
+selectors (`SMS_PROVIDER`, `EMAIL_PROVIDER`, `LLM_PROVIDER`, and
+`FMCSA_PROVIDER`). Mock providers remain active when these selectors are not
+set.
+
+For a manual Docker deployment, build from the repository root with
+`docker build -f backend/Dockerfile -t kingoffreight .`. Set `DATABASE_URL`,
+`BROKER_PASSWORD`, and `SECRET_KEY`; the container uses the platform `PORT`
+when provided and serves both the API and built frontend.
 
 The demo broker password is `changeme`; replace it before exposing the service.
 The API is at `http://localhost:8000`, with health check `/health`. OpenAPI docs
