@@ -17,6 +17,7 @@ import Modal from "../components/Modal";
 import { EmptyState, ErrorState, PageHeading, StatusBadge } from "../components/common";
 import type { Carrier, Communication } from "../types";
 import { draftFrom, payloadFromDraft, type LoadDraft } from "../load-form";
+import { formatShortDateTime } from "../utils";
 
 type Filter = "All" | "BOLs" | "Carrier" | "Check-in replies" | "Other";
 
@@ -70,12 +71,7 @@ function InboxItem({
               {tagLabel}
             </span>
             <span className="text-xs text-slate-400">
-              {new Intl.DateTimeFormat(undefined, {
-                month: "short",
-                day: "numeric",
-                hour: "numeric",
-                minute: "2-digit",
-              }).format(new Date(item.created_at))}
+              {formatShortDateTime(item.created_at)}
             </span>
           </div>
           <h2 className="mt-3 line-clamp-2 text-base font-bold text-slate-900">

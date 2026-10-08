@@ -35,5 +35,8 @@ def logout(response: Response) -> dict[str, bool]:
 
 
 @router.get("/me", dependencies=[Depends(require_broker)])
-def me() -> dict[str, bool]:
-    return {"authenticated": True}
+def me() -> dict[str, bool | str]:
+    return {
+        "authenticated": True,
+        "broker_timezone": get_settings().broker_timezone,
+    }

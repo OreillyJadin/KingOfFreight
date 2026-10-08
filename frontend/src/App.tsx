@@ -7,6 +7,7 @@ import Login from "./pages/Login";
 import Status from "./pages/Status";
 import Tracking from "./pages/Tracking";
 import TruckStop from "./pages/TruckStop";
+import { setBrokerTimeZone } from "./utils";
 
 function ProtectedApp() {
   const auth = useQuery({ queryKey: ["auth"], queryFn: api.me });
@@ -18,6 +19,7 @@ function ProtectedApp() {
     );
   }
   if (auth.isError || !auth.data?.authenticated) return <Navigate to="/login" replace />;
+  setBrokerTimeZone(auth.data.broker_timezone);
   return (
     <AppLayout>
       <Routes>

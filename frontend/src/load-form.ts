@@ -1,3 +1,5 @@
+import { toBrokerInputValue } from "./utils";
+
 export type LoadDraft = Record<string, string>;
 
 export const loadFieldGroups = [
@@ -53,15 +55,12 @@ export function draftFrom(source: Record<string, unknown> = {}): LoadDraft {
     }
   }
   for (const key of ["pickup_datetime", "delivery_datetime"]) {
-    if (draft[key]) {
-      const parsed = new Date(draft[key]);
-      if (!Number.isNaN(parsed.getTime())) {
-        draft[key] = new Date(
-          parsed.getTime() - parsed.getTimezoneOffset() * 60_000,
-        )
-          .toISOString()
-          .slice(0, 16);
-      }
+    const value = draft[key];
+    if (!value) continue;
+    if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(value)) {
+      draft[key] = toBrokerInputValue(value);
+    } else {
+      draft[key] = value.slice(0, 16);
     }
   }
   return draft;

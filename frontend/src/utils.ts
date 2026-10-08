@@ -1,12 +1,51 @@
 import type { LoadStatus } from "./types";
 
+let brokerTimeZone = "America/Chicago";
+
+export function setBrokerTimeZone(tz: string) {
+  brokerTimeZone = tz;
+}
+
+export function getBrokerTimeZone() {
+  return brokerTimeZone;
+}
+
+function brokerDateTimeFormat(options: Intl.DateTimeFormatOptions) {
+  try {
+    return new Intl.DateTimeFormat(undefined, {
+      ...options,
+      timeZone: brokerTimeZone,
+      timeZoneName: "shortGeneric",
+    });
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error;
+    return new Intl.DateTimeFormat(undefined, {
+      ...options,
+      timeZone: brokerTimeZone,
+      timeZoneName: "short",
+    });
+  }
+}
+
 export function formatDateTime(value?: string | null, fallback = "TBD") {
   if (!value) return fallback;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return fallback;
-  return new Intl.DateTimeFormat(undefined, {
+  return brokerDateTimeFormat({
     weekday: "short",
     month: "numeric",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+export function formatShortDateTime(value?: string | null, fallback = "") {
+  if (!value) return fallback;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return fallback;
+  return brokerDateTimeFormat({
+    month: "short",
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
@@ -17,10 +56,33 @@ export function formatClock(value?: string | null, fallback = "time unknown") {
   if (!value) return fallback;
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return fallback;
-  return new Intl.DateTimeFormat(undefined, {
+  return brokerDateTimeFormat({
     hour: "numeric",
     minute: "2-digit",
   }).format(date);
+}
+
+export function brokerZoneLabel() {
+  return (
+    brokerDateTimeFormat({}).formatToParts(new Date()).find((part) => part.type === "timeZoneName")
+      ?.value ?? brokerTimeZone
+  );
+}
+
+export function toBrokerInputValue(iso: string) {
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return iso.slice(0, 16);
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: brokerTimeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
 }
 
 export function cityState(city?: string | null, state?: string | null) {

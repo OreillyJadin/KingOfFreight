@@ -18,6 +18,7 @@ def test_auth_public_routes_and_twilio_signature(client, db, load_data, monkeypa
 
     unauthorized = TestClient(app)
     assert unauthorized.get("/api/loads").status_code == 401
+    assert unauthorized.get("/api/auth/me").status_code == 401
     assert (
         unauthorized.post("/api/auth/login", json={"password": "wrong"}).status_code
         == 401
@@ -52,6 +53,10 @@ def test_auth_public_routes_and_twilio_signature(client, db, load_data, monkeypa
         monkeypatch.delenv("SMS_PROVIDER")
         get_settings.cache_clear()
     assert COOKIE_NAME in client.cookies
+    assert client.get("/api/auth/me").json() == {
+        "authenticated": True,
+        "broker_timezone": get_settings().broker_timezone,
+    }
     session_cookie = client.cookies.get(COOKIE_NAME)
     assert session_cookie and "test-password" not in session_cookie
     encoded_payload = session_cookie.split(".", 1)[0]

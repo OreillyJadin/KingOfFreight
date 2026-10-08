@@ -1,5 +1,6 @@
 import type { ChangeEvent } from "react";
 import { loadFieldGroups, type LoadDraft } from "../load-form";
+import { brokerZoneLabel } from "../utils";
 
 export default function LoadFields({
   value,
@@ -22,7 +23,7 @@ export default function LoadFields({
             {group.fields.map(([key, label, type]) => (
               <label key={key} className="block">
                 <span className="mb-1.5 block text-xs font-semibold text-slate-600">
-                  {label}
+                  {type === "datetime-local" ? `${label} (${brokerZoneLabel()})` : label}
                 </span>
                 <input
                   type={type}

@@ -65,7 +65,8 @@ export const api = {
       redirectOn401: false,
     }),
   logout: () => request<{ authenticated: boolean }>("/auth/logout", json("POST")),
-  me: () => request<{ authenticated: boolean }>("/auth/me"),
+  me: () =>
+    request<{ authenticated: boolean; broker_timezone: string }>("/auth/me"),
   loads: (tab: "truckstop" | "delivery", includeDelivered = false) =>
     request<Load[]>(
       `/loads?tab=${tab}&include_delivered=${includeDelivered ? "true" : "false"}`,
