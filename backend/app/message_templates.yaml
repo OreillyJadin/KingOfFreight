@@ -1,0 +1,85 @@
+# Placeholders: {customer_contact_name} (falls back to "there"), {reference} (load reference/BOL #),
+# {pickup_city_state}, {delivery_city_state}, {eta_text} (e.g. "Thu 10/9 around 3:00 PM", or "" if unknown),
+# {broker_name}, {broker_company}, {note} (free text the broker or parser supplied, may be "").
+# Lines that would render with an empty {eta_text} or {note} use the *_no_eta / *_no_note variant.
+
+customer_status:
+  booked:
+    subject: "Load {reference} booked: {pickup_city_state} to {delivery_city_state}"
+    body: |
+      Hi {customer_contact_name},
+
+      Your load {reference} from {pickup_city_state} to {delivery_city_state} is booked with a carrier. I'll keep you posted as it moves.
+
+      Thanks,
+      {broker_name}
+      {broker_company}
+  picked_up:
+    subject: "Load {reference} picked up"
+    body: |
+      Hi {customer_contact_name},
+
+      Your load {reference} has been picked up in {pickup_city_state} and is headed to {delivery_city_state}. Current ETA: {eta_text}.
+
+      Thanks,
+      {broker_name}
+      {broker_company}
+    body_no_eta: |
+      Hi {customer_contact_name},
+
+      Your load {reference} has been picked up in {pickup_city_state} and is headed to {delivery_city_state}.
+
+      Thanks,
+      {broker_name}
+      {broker_company}
+  in_transit:
+    subject: "Load {reference} in transit"
+    body: |
+      Hi {customer_contact_name},
+
+      Quick update: load {reference} is in transit to {delivery_city_state}. Current ETA: {eta_text}.
+
+      Thanks,
+      {broker_name}
+      {broker_company}
+    body_no_eta: |
+      Hi {customer_contact_name},
+
+      Quick update: load {reference} is in transit to {delivery_city_state} and on schedule.
+
+      Thanks,
+      {broker_name}
+      {broker_company}
+  delayed:
+    subject: "Load {reference} delayed"
+    body: |
+      Hi {customer_contact_name},
+
+      Heads up: load {reference} to {delivery_city_state} is running behind. {note} Updated ETA: {eta_text}. I'll let you know if anything changes.
+
+      Thanks,
+      {broker_name}
+      {broker_company}
+    body_no_eta: |
+      Hi {customer_contact_name},
+
+      Heads up: load {reference} to {delivery_city_state} is running behind. {note} I'll send an updated ETA as soon as I have one.
+
+      Thanks,
+      {broker_name}
+      {broker_company}
+  delivered:
+    subject: "Load {reference} delivered"
+    body: |
+      Hi {customer_contact_name},
+
+      Load {reference} has been delivered in {delivery_city_state}. Thanks for the business!
+
+      {broker_name}
+      {broker_company}
+
+# Sent to the driver/dispatcher. Keep short — these go out as SMS.
+driver_checkin:
+  pickup: "{broker_company}: checking in on load {reference} ({pickup_city_state} -> {delivery_city_state}). Did you get loaded yet? Just reply here. Thanks!"
+  dropoff: "{broker_company}: checking in on load {reference} to {delivery_city_state}. Are you delivered/empty yet? Just reply here. Thanks!"
+  tracking_link: "{broker_company}: for load {reference}, tap to share your location with us (no app needed): {tracking_url}"
