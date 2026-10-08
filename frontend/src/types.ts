@@ -217,3 +217,16 @@ export type TrackingSummary = {
   delivery_state: string | null;
   broker_company: string;
 };
+
+export type BrokerPrefs = {
+  broker_name: string;
+  broker_company: string;
+  broker_timezone: string;
+  checkin_offset_minutes: number;
+  no_reply_alert_minutes: number;
+  checkin_default_channel: "sms" | "email";
+};
+
+export type BrokerPrefsUpdate = Partial<{
+  [Key in keyof BrokerPrefs]: BrokerPrefs[Key] | null;
+}>;

@@ -1,4 +1,5 @@
 import re
+from dataclasses import asdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -17,6 +18,7 @@ from app.integrations.fmcsa import FmcsaProvider, get_fmcsa_provider
 from app.integrations.llm import LlmProvider, get_llm_provider
 from app.integrations.sms import SmsProvider, get_sms_provider
 from app.models import (
+    BrokerSettings,
     Carrier,
     Communication,
     Load,
@@ -28,6 +30,7 @@ from app.models import (
 from app.schemas import (
     ApproveStatus,
     BookLoad,
+    BrokerSettingsUpdate,
     CarrierOut,
     CheckInOut,
     CommunicationOut,
@@ -53,6 +56,7 @@ from app.services.checkins import (
 )
 from app.services.fmcsa import score_carrier
 from app.services.messaging import send_outbound
+from app.services.preferences import get_prefs
 from app.services.templates import city_state, render_checkin, render_tracking_link
 
 protected = APIRouter(prefix="/api", dependencies=[Depends(require_broker)])
@@ -76,6 +80,26 @@ def _get_load(db: Session, load_id: int) -> Load:
     return load
 
 
+@protected.get("/settings")
+def read_settings(db: Session = Depends(get_db)) -> dict:
+    return asdict(get_prefs(db))
+
+
+@protected.put("/settings")
+def update_settings(
+    payload: BrokerSettingsUpdate, db: Session = Depends(get_db)
+) -> dict:
+    row = db.get(BrokerSettings, 1)
+    if row is None:
+        row = BrokerSettings(id=1)
+        db.add(row)
+    for field in payload.model_fields_set:
+        setattr(row, field, getattr(payload, field))
+    row.updated_at = utcnow()
+    db.commit()
+    return asdict(get_prefs(db))
+
+
 def _normalized_mc(value: str) -> str:
     mc = re.sub(r"\D", "", value)
     if not mc or len(mc) > 8:
@@ -87,10 +111,10 @@ def _normalized_phone(value: str | None) -> str | None:
     return normalize_contact(value, "sms") if value else None
 
 
-def _to_local_aware(value: datetime | None) -> datetime | None:
+def _to_local_aware(value: datetime | None, tz: str) -> datetime | None:
     if value is None:
         return None
-    zone = ZoneInfo(get_settings().broker_timezone)
+    zone = ZoneInfo(tz)
     interpreted = value.replace(tzinfo=zone) if value.tzinfo is None else value
     return interpreted.astimezone(timezone.utc)
 
@@ -102,11 +126,17 @@ def _apply_status(load: Load, status: str) -> None:
 
 
 def _appointment_checkin(
-    load: Load, kind: str, when: datetime, offset: int, channel: str, contact: str
+    load: Load,
+    kind: str,
+    when: datetime,
+    offset: int,
+    channel: str,
+    contact: str,
+    tz: str,
 ) -> ScheduledCheckIn:
     from app.services.templates import local_datetime
 
-    scheduled = local_datetime(when)
+    scheduled = local_datetime(when, tz)
     assert scheduled is not None
     return ScheduledCheckIn(
         load_id=load.id,
@@ -180,10 +210,15 @@ def get_load(load_id: int, db: Session = Depends(get_db)) -> dict:
 @protected.post("/loads", response_model=LoadOut, status_code=201)
 def create_load(payload: LoadCreate, db: Session = Depends(get_db)) -> Load:
     values = payload.model_dump()
+    broker_timezone = get_prefs(db).broker_timezone
     for field in ("driver_phone", "dispatcher_phone"):
         values[field] = _normalized_phone(values[field])
-    values["pickup_datetime"] = _to_local_aware(values["pickup_datetime"])
-    values["delivery_datetime"] = _to_local_aware(values["delivery_datetime"])
+    values["pickup_datetime"] = _to_local_aware(
+        values["pickup_datetime"], broker_timezone
+    )
+    values["delivery_datetime"] = _to_local_aware(
+        values["delivery_datetime"], broker_timezone
+    )
     load = Load(**values)
     db.add(load)
     db.commit()
@@ -194,9 +229,10 @@ def create_load(payload: LoadCreate, db: Session = Depends(get_db)) -> Load:
 @protected.patch("/loads/{load_id}", response_model=LoadOut)
 def patch_load(load_id: int, payload: LoadPatch, db: Session = Depends(get_db)) -> Load:
     load = _get_load(db, load_id)
+    broker_timezone = get_prefs(db).broker_timezone
     for key, value in payload.model_dump(exclude_unset=True).items():
         if key.endswith("_datetime"):
-            value = _to_local_aware(value)
+            value = _to_local_aware(value, broker_timezone)
         elif key in {"driver_phone", "dispatcher_phone"}:
             value = _normalized_phone(value)
         setattr(load, key, value)
@@ -278,8 +314,8 @@ def book_load(
     load.checkin_channel = payload.checkin_channel
     load.status = "booked"
     load.booked_at = utcnow()
-    settings = get_settings()
-    default = settings.checkin_default_channel
+    prefs = get_prefs(db)
+    default = prefs.checkin_default_channel
     channel = payload.checkin_channel or (
         "sms" if default == "sms" and contact_phone else "email"
     )
@@ -294,18 +330,30 @@ def book_load(
     offset = (
         payload.checkin_offset_minutes
         if payload.checkin_offset_minutes is not None
-        else settings.checkin_offset_minutes
+        else prefs.checkin_offset_minutes
     )
     if load.pickup_datetime:
         db.add(
             _appointment_checkin(
-                load, "pickup", load.pickup_datetime, offset, channel, contact
+                load,
+                "pickup",
+                load.pickup_datetime,
+                offset,
+                channel,
+                contact,
+                prefs.broker_timezone,
             )
         )
     if load.delivery_datetime:
         db.add(
             _appointment_checkin(
-                load, "dropoff", load.delivery_datetime, offset, channel, contact
+                load,
+                "dropoff",
+                load.delivery_datetime,
+                offset,
+                channel,
+                contact,
+                prefs.broker_timezone,
             )
         )
     draft_status_update(db, load, "booked", "manual", None, None, applied=True)
@@ -319,6 +367,7 @@ def manual_status(
     load_id: int, payload: ManualStatus, db: Session = Depends(get_db)
 ) -> StatusUpdate:
     load = _get_load(db, load_id)
+    broker_timezone = get_prefs(db).broker_timezone
     _apply_status(load, payload.status)
     update = draft_status_update(
         db,
@@ -326,7 +375,7 @@ def manual_status(
         payload.status,
         "manual",
         payload.note,
-        _to_local_aware(payload.eta),
+        _to_local_aware(payload.eta, broker_timezone),
         applied=True,
     )
     db.commit()
@@ -663,6 +712,7 @@ def create_load_from_inbox(
         )
     }
     fields.update(overrides)
+    broker_timezone = get_prefs(db).broker_timezone
     for key in ("pickup_datetime", "delivery_datetime"):
         if fields[key]:
             value = (
@@ -670,7 +720,7 @@ def create_load_from_inbox(
                 if isinstance(fields[key], str)
                 else fields[key]
             )
-            fields[key] = _to_local_aware(value)
+            fields[key] = _to_local_aware(value, broker_timezone)
     load = Load(
         reference=reference,
         status="new",
@@ -742,7 +792,7 @@ def public_tracking(token: str, db: Session = Depends(get_db)) -> dict:
         "pickup_state": load.pickup_state,
         "delivery_city": load.delivery_city,
         "delivery_state": load.delivery_state,
-        "broker_company": get_settings().broker_company,
+        "broker_company": get_prefs(db).broker_company,
     }
 
 

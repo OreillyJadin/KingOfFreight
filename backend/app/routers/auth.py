@@ -3,6 +3,9 @@ from pydantic import BaseModel
 
 from app.auth import COOKIE_NAME, create_session, password_matches, require_broker
 from app.config import get_settings
+from app.db import get_db
+from app.services.preferences import get_prefs
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -35,8 +38,8 @@ def logout(response: Response) -> dict[str, bool]:
 
 
 @router.get("/me", dependencies=[Depends(require_broker)])
-def me() -> dict[str, bool | str]:
+def me(db: Session = Depends(get_db)) -> dict[str, bool | str]:
     return {
         "authenticated": True,
-        "broker_timezone": get_settings().broker_timezone,
+        "broker_timezone": get_prefs(db).broker_timezone,
     }

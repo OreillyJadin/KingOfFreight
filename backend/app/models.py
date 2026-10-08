@@ -5,6 +5,7 @@ from typing import Any
 
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     DateTime,
     ForeignKey,
     Integer,
@@ -251,3 +252,21 @@ class LocationPing(Base):
         DateTime(timezone=True), default=utcnow
     )
     user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+
+class BrokerSettings(Base):
+    __tablename__ = "broker_settings"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_broker_settings_singleton"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    broker_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    broker_company: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    broker_timezone: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    checkin_offset_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    no_reply_alert_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    checkin_default_channel: Mapped[str | None] = mapped_column(
+        String(10), nullable=True
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )

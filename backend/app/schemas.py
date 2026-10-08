@@ -1,8 +1,9 @@
 from datetime import datetime
 from decimal import Decimal
 from typing import Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class ORMModel(BaseModel):
@@ -166,6 +167,38 @@ class TrackingPing(BaseModel):
     lat: float = Field(ge=-90, le=90)
     lng: float = Field(ge=-180, le=180)
     accuracy_m: float | None = Field(default=None, ge=0)
+
+
+class BrokerSettingsUpdate(BaseModel):
+    broker_name: str | None = None
+    broker_company: str | None = None
+    broker_timezone: str | None = None
+    checkin_offset_minutes: int | None = Field(default=None, ge=0, le=720)
+    no_reply_alert_minutes: int | None = Field(default=None, ge=5, le=240)
+    checkin_default_channel: Literal["sms", "email"] | None = None
+
+    @field_validator("broker_name", "broker_company", mode="before")
+    @classmethod
+    def normalize_broker_details(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if not isinstance(value, str):
+            return value
+        normalized = value.strip()
+        if not 1 <= len(normalized) <= 100:
+            raise ValueError("Must be between 1 and 100 characters")
+        return normalized
+
+    @field_validator("broker_timezone")
+    @classmethod
+    def validate_broker_timezone(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError, TypeError) as exc:
+            raise ValueError("Invalid timezone") from exc
+        return value
 
 
 class CreateLoadOverrides(LoadCreate):

@@ -4,6 +4,7 @@ import {
   Boxes,
   LogOut,
   Mail,
+  Settings,
   Truck,
   X,
 } from "lucide-react";
@@ -185,6 +186,20 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 />
               )}
             </div>
+            <NavLink
+              to="/settings"
+              className={({ isActive }) =>
+                `grid h-11 w-11 place-items-center rounded-xl ${
+                  isActive
+                    ? "bg-blue-50 text-blue-700"
+                    : "text-slate-600 hover:bg-slate-100"
+                }`
+              }
+              aria-label="Settings"
+              title="Settings"
+            >
+              <Settings className="h-5 w-5" />
+            </NavLink>
             <button
               onClick={() => void logout()}
               className="flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100"
