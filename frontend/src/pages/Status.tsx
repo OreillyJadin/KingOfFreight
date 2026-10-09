@@ -702,7 +702,7 @@ function LoadStatusDetail({ load }: { load: Load }) {
           )}
           <div className="mt-4">
             <p className="mb-2 text-[11px] font-bold uppercase tracking-[0.12em] text-muted">Update status</p>
-            <div className="flex gap-2 overflow-x-auto pb-1">
+            <div className="flex flex-wrap gap-2">
               {statuses.map((status) => (
                 <button
                   key={status}
