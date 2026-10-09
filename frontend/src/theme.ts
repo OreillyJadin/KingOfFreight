@@ -24,7 +24,9 @@ function setTheme(nextTheme: Theme) {
   document.documentElement.dataset.theme = nextTheme;
   try {
     localStorage.setItem("fw-theme", nextTheme);
-  } catch {}
+  } catch {
+    // The in-memory theme still works when storage is unavailable.
+  }
   const meta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
   if (meta)
     meta.content =
