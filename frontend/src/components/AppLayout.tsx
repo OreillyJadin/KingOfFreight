@@ -2,19 +2,20 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   Boxes,
-  Crown,
   LogOut,
   Mail,
   Settings,
   Truck,
   X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
-import { NavLink, useNavigate } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import type { Alert, StatusUpdate } from "../types";
 import { formatClock } from "../utils";
+import { Wordmark } from "./Brand";
+import ThemeToggle from "./ThemeToggle";
 
 const tabs = [
   { to: "/inbox", label: "Inbox", icon: Mail, key: "inbox" },
@@ -32,17 +33,17 @@ function AlertsPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute right-0 top-14 z-40 w-[min(92vw,390px)] overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl">
-      <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+    <div className="absolute right-0 top-14 z-40 w-[min(92vw,390px)] overflow-hidden rounded-2xl border border-line bg-surface shadow-xl">
+      <div className="flex items-center justify-between border-b border-line/60 px-4 py-3">
         <div>
-          <p className="font-bold text-ink">Needs attention</p>
-          <p className="text-xs text-slate-500">
+          <p className="font-bold text-fg">Needs attention</p>
+          <p className="text-xs text-muted tabular-nums">
             {alerts.length + pending.length} open item{alerts.length + pending.length === 1 ? "" : "s"}
           </p>
         </div>
         <button
           onClick={onClose}
-          className="grid h-10 w-10 place-items-center rounded-lg text-slate-500 hover:bg-slate-100"
+          className="grid h-10 w-10 place-items-center rounded-lg text-muted hover:bg-surface-3"
           aria-label="Close alerts"
         >
           <X className="h-4 w-4" />
@@ -54,14 +55,14 @@ function AlertsPanel({
               to={`/status?load=${alert.load.id}`}
               onClick={onClose}
               key={`alert-${alert.id}`}
-              className="block rounded-xl px-3 py-3 hover:bg-slate-50"
+              className="block rounded-xl px-3 py-3 hover:bg-surface-2"
             >
-              <p className="text-sm font-semibold text-slate-800">
+              <p className="text-sm font-semibold text-fg tabular-nums">
                 {alert.state === "no_reply"
                   ? `No reply to ${alert.kind} check-in sent ${formatClock(alert.checkin_sent_at)}`
                   : `${alert.parsed_status ?? "Unclear"} reply · ${alert.load.reference}`}
               </p>
-              <p className="mt-1 line-clamp-2 text-xs text-slate-500">
+              <p className="mt-1 line-clamp-2 text-xs text-muted">
                 {alert.reply_raw_text || alert.parsed_summary || `${alert.load.reference} · ${alert.kind} check-in`}
               </p>
             </NavLink>
@@ -71,18 +72,18 @@ function AlertsPanel({
             to={`/status?load=${item.load_id}`}
             onClick={onClose}
             key={`draft-${item.id}`}
-            className="block rounded-xl px-3 py-3 hover:bg-slate-50"
+            className="block rounded-xl px-3 py-3 hover:bg-surface-2"
           >
-            <p className="text-sm font-semibold text-slate-800">
+            <p className="text-sm font-semibold text-fg">
               Review {item.status.replace("_", " ")} update
             </p>
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs text-muted tabular-nums">
               {item.source === "checkin" ? "Driver reply" : "Status draft"} · Load #{item.load_id}
             </p>
           </NavLink>
         ))}
         {alerts.length + pending.length === 0 && (
-          <p className="px-3 py-6 text-center text-sm text-slate-500">
+          <p className="px-3 py-6 text-center text-sm text-muted">
             You’re all caught up.
           </p>
         )}
@@ -93,8 +94,18 @@ function AlertsPanel({
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const [alertsOpen, setAlertsOpen] = useState(false);
+  useEffect(() => {
+    const titles: Record<string, string> = {
+      "/inbox": "Inbox · Fifth Wheel",
+      "/truckstop": "TruckStop · Fifth Wheel",
+      "/status": "Delivery Status · Fifth Wheel",
+      "/settings": "Settings · Fifth Wheel",
+    };
+    document.title = titles[location.pathname] ?? "Fifth Wheel";
+  }, [location.pathname]);
   const inbox = useQuery({
     queryKey: ["inbox"],
     queryFn: api.inbox,
@@ -134,16 +145,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     navigate("/login");
   }
   return (
-    <div className="min-h-screen bg-canvas pb-24 text-ink md:pb-0">
-      <header className="sticky top-0 z-30 border-b border-white/5 bg-brand-950/95 text-white shadow-[0_1px_0_rgba(255,255,255,0.04),0_8px_24px_rgba(18,26,61,0.18)] backdrop-blur">
+    <div className="min-h-screen bg-bg pb-24 text-fg md:pb-0">
+      <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
         <div className="mx-auto flex h-[68px] max-w-6xl items-center justify-between px-4 sm:px-6">
           <NavLink to="/inbox" className="flex min-w-0 items-center gap-2.5">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-gold-300 to-gold-500 text-brand-950 shadow-sm shadow-black/30">
-              <Crown className="h-5 w-5" strokeWidth={2.25} />
-            </span>
-            <span className="truncate text-[17px] font-extrabold tracking-tight text-white">
-              <span className="text-gold-300">King</span>OfFreight
-            </span>
+            <Wordmark className="min-w-0 truncate" markClassName="h-8 w-8 text-accent" />
           </NavLink>
           <nav className="hidden h-full items-center gap-1 md:flex">
             {tabs.map(({ to, label, key }) => (
@@ -153,8 +159,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 className={({ isActive }) =>
                   `flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition ${
                     isActive
-                      ? "bg-white/10 text-white ring-1 ring-inset ring-white/15"
-                      : "text-white/65 hover:bg-white/5 hover:text-white"
+                      ? "bg-accent/12 text-fg ring-1 ring-inset ring-accent/30"
+                      : "text-muted hover:bg-surface-2 hover:text-fg"
                   }`
                 }
               >
@@ -163,10 +169,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     {label}
                     <span
                       className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                        isActive ? "bg-gold-400 text-brand-950" : "bg-white/10 text-white/70"
+                        isActive ? "bg-accent text-on-accent" : "bg-surface-3 text-muted"
                       }`}
                     >
-                      {countFor(key)}
+                      <span className="tabular-nums">{countFor(key)}</span>
                     </span>
                   </>
                 )}
@@ -174,16 +180,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             ))}
           </nav>
           <div className="flex items-center gap-1.5">
+            <ThemeToggle />
             <div className="relative">
               <button
                 onClick={() => setAlertsOpen((open) => !open)}
-                className="relative grid h-11 w-11 place-items-center rounded-xl text-white/75 hover:bg-white/10 hover:text-white"
+                className="relative grid h-11 w-11 place-items-center rounded-xl text-muted hover:bg-surface-2 hover:text-fg"
                 aria-label={`Alerts, ${totalAttention} open`}
               >
                 <Bell className="h-5 w-5" />
                 {totalAttention > 0 && (
-                  <span className="absolute right-1 top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-brand-950">
-                    {totalAttention > 9 ? "9+" : totalAttention}
+                  <span className="absolute right-1 top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-on-danger ring-2 ring-surface">
+                    <span className="tabular-nums">{totalAttention > 9 ? "9+" : totalAttention}</span>
                   </span>
                 )}
               </button>
@@ -200,8 +207,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               className={({ isActive }) =>
                 `grid h-11 w-11 place-items-center rounded-xl ${
                   isActive
-                    ? "bg-white/10 text-white ring-1 ring-inset ring-white/15"
-                    : "text-white/75 hover:bg-white/10 hover:text-white"
+                    ? "bg-accent/12 text-fg ring-1 ring-inset ring-accent/30"
+                    : "text-muted hover:bg-surface-2 hover:text-fg"
                 }`
               }
               aria-label="Settings"
@@ -211,7 +218,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </NavLink>
             <button
               onClick={() => void logout()}
-              className="flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
+              className="flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-muted hover:bg-surface-2 hover:text-fg"
               aria-label="Log out"
               title="Log out"
             >
@@ -224,7 +231,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       <main className="mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6 sm:pt-8">
         {children}
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 pb-[env(safe-area-inset-bottom)] shadow-[0_-4px_18px_rgba(15,23,42,0.06)] backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         <div className="mx-auto grid max-w-xl grid-cols-3 px-2 pt-1.5">
           {tabs.map(({ to, label, icon: Icon, key }) => (
             <NavLink
@@ -232,15 +239,15 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               to={to}
               className={({ isActive }) =>
                 `flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-semibold ${
-                  isActive ? "text-brand-700" : "text-slate-500"
+                  isActive ? "text-accent-ink" : "text-muted"
                 }`
               }
             >
               <span className="relative">
                 <Icon className="h-5 w-5" />
                 {countFor(key) > 0 && (
-                  <span className="absolute -right-2 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-brand-600 px-1 text-[9px] font-bold text-white">
-                    {countFor(key) > 9 ? "9+" : countFor(key)}
+                  <span className="absolute -right-2 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[9px] font-bold text-on-accent">
+                    <span className="tabular-nums">{countFor(key) > 9 ? "9+" : countFor(key)}</span>
                   </span>
                 )}
               </span>

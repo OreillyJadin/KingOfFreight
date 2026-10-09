@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, Crown, LockKeyhole } from "lucide-react";
+import { ArrowRight, LockKeyhole } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useToast } from "../useToast";
+import { Wordmark } from "../components/Brand";
+import ThemeToggle from "../components/ThemeToggle";
 
 export default function Login() {
   const [password, setPassword] = useState("");
@@ -11,6 +13,9 @@ export default function Login() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  useEffect(() => {
+    document.title = "Sign in · Fifth Wheel";
+  }, []);
   const login = useMutation({
     mutationFn: api.login,
     onSuccess: async () => {
@@ -22,46 +27,41 @@ export default function Login() {
   });
   if (login.isSuccess) return <Navigate to="/inbox" replace />;
   return (
-    <main className="grid min-h-screen bg-white md:grid-cols-[1.05fr_0.95fr]">
-      <section className="relative hidden overflow-hidden bg-brand-950 px-12 py-14 text-white md:flex md:flex-col md:justify-between lg:px-20">
-        <div className="absolute -left-40 bottom-[-180px] h-[460px] w-[460px] rounded-full bg-gold-400/10 blur-3xl" />
-        <div className="absolute -right-28 -top-32 h-[420px] w-[420px] rounded-full border border-white/10" />
-        <div className="absolute -right-10 -top-14 h-[285px] w-[285px] rounded-full border border-white/10" />
-        <div className="relative flex items-center gap-3">
-          <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-gold-300 to-gold-500 text-brand-950">
-            <Crown className="h-6 w-6" strokeWidth={2.25} />
-          </span>
-          <span className="text-lg font-extrabold tracking-tight"><span className="text-gold-300">King</span>OfFreight</span>
+    <main className="relative grid min-h-screen bg-bg md:grid-cols-[1.05fr_0.95fr]">
+      <ThemeToggle className="absolute right-4 top-4 z-20" />
+      <section className="relative hidden overflow-hidden bg-hero px-12 py-14 text-hero-fg md:flex md:flex-col md:justify-between lg:px-20">
+        <div className="absolute -left-40 bottom-[-180px] h-[460px] w-[460px] rounded-full bg-accent/10 blur-3xl" />
+        <div className="absolute -right-28 -top-32 h-[420px] w-[420px] rounded-full border border-hero-fg/10" />
+        <div className="absolute -right-10 -top-14 h-[285px] w-[285px] rounded-full border border-hero-fg/10" />
+        <div className="relative">
+          <Wordmark markClassName="h-11 w-11 text-accent" />
         </div>
         <div className="relative max-w-lg">
-          <p className="mb-5 text-xs font-bold uppercase tracking-[0.22em] text-gold-300">
+          <p className="mb-5 text-xs font-bold uppercase tracking-[0.22em] text-accent">
             Freight operations
           </p>
           <h1 className="text-4xl font-bold leading-tight tracking-tight lg:text-5xl">
-            Keep every load moving.
+            Every load, connected.
           </h1>
-          <p className="mt-5 max-w-md text-base leading-7 text-slate-300">
+          <p className="mt-5 max-w-md text-base leading-7 text-hero-fg/70">
             One clear view of your inbox, active loads, driver check-ins, and customer updates.
           </p>
         </div>
-        <p className="relative text-xs text-slate-500">A quieter way to run the day.</p>
+        <p className="relative text-xs text-hero-fg/50">A quieter way to run the day.</p>
       </section>
-      <section className="flex min-h-screen items-center justify-center bg-canvas px-5 py-10 md:bg-white">
+      <section className="flex min-h-screen items-center justify-center bg-bg px-5 py-10 md:bg-surface">
         <div className="w-full max-w-[410px]">
-          <div className="mb-9 flex items-center gap-3 md:hidden">
-            <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-gold-300 to-gold-500 text-brand-950">
-              <Crown className="h-6 w-6" strokeWidth={2.25} />
-            </span>
-            <span className="text-lg font-extrabold text-slate-900"><span className="text-gold-700">King</span>OfFreight</span>
+          <div className="mb-9 md:hidden">
+            <Wordmark markClassName="h-11 w-11 text-accent" />
           </div>
-          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card sm:p-8 md:border-0 md:p-0 md:shadow-none">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-700">
+          <div className="rounded-2xl border border-line bg-surface p-6 shadow-card sm:p-8 md:border-0 md:bg-transparent md:p-0 md:shadow-none">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent-ink">
               Broker workspace
             </p>
-            <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">
+            <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-fg">
               Welcome back
             </h2>
-            <p className="mt-2 text-sm text-slate-500">
+            <p className="mt-2 text-sm text-muted">
               Sign in to pick up where you left off.
             </p>
             <form
@@ -73,11 +73,11 @@ export default function Login() {
               }}
             >
               <label className="block">
-                <span className="mb-2 block text-sm font-semibold text-slate-700">
+                <span className="mb-2 block text-sm font-semibold text-fg-2">
                   Broker password
                 </span>
                 <span className="relative block">
-                  <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                  <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
                   <input
                     autoFocus
                     required
@@ -86,26 +86,26 @@ export default function Login() {
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder="Enter your password"
-                    className="h-12 w-full rounded-xl border border-slate-300 bg-white pl-10 pr-3 text-sm text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-brand-500 focus:ring-4 focus:ring-brand-100"
+                    className="h-12 w-full rounded-xl border border-line-strong bg-surface pl-10 pr-3 text-sm text-fg outline-none transition placeholder:text-subtle focus:border-accent focus:ring-4 focus:ring-accent/25"
                   />
                 </span>
               </label>
               {error && (
-                <p className="rounded-lg bg-rose-50 px-3 py-2 text-sm text-rose-700" role="alert">
+                <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger-ink" role="alert">
                   {error}
                 </p>
               )}
               <button
                 type="submit"
                 disabled={login.isPending}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-wait disabled:opacity-70"
+                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-bold text-on-accent shadow-sm transition hover:bg-accent-hover disabled:cursor-wait disabled:opacity-70"
               >
                 {login.isPending ? "Signing in…" : "Sign in"}
                 {!login.isPending && <ArrowRight className="h-4 w-4" />}
               </button>
             </form>
           </div>
-          <p className="mt-6 text-center text-xs text-slate-400">
+          <p className="mt-6 text-center text-xs text-subtle">
             Secure broker access · Single-user workspace
           </p>
         </div>

@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { ToastProvider } from "./components/Toast";
-import "@fontsource-variable/plus-jakarta-sans";
+import "@fontsource-variable/inter";
 import "./styles.css";
 
 const queryClient = new QueryClient({
