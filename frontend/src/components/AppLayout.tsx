@@ -289,6 +289,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 aria-controls={headerAlertsId}
               >
                 <Bell className="h-5 w-5" />
+                <span className="sr-only">Alerts</span>
                 {totalAttention > 0 && (
                   <span className="absolute right-1 top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-bold text-on-danger ring-2 ring-surface">
                     <span className="tabular-nums">{totalAttention > 9 ? "9+" : totalAttention}</span>
