@@ -9,6 +9,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    LargeBinary,
     JSON,
     Numeric,
     String,
@@ -33,7 +34,6 @@ class Load(Base):
     bol_source: Mapped[int | None] = mapped_column(
         ForeignKey("communications.id"), nullable=True
     )
-    bol_file_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
     pickup_location: Mapped[str | None] = mapped_column(Text, nullable=True)
     pickup_city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     pickup_state: Mapped[str | None] = mapped_column(String(30), nullable=True)
@@ -142,6 +142,18 @@ class Carrier(Base):
     loads: Mapped[list[Load]] = relationship(back_populates="carrier")
 
 
+class BolFile(Base):
+    __tablename__ = "bol_files"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    content: Mapped[bytes] = mapped_column(LargeBinary)
+    size_bytes: Mapped[int] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
 class Communication(Base):
     __tablename__ = "communications"
     __table_args__ = (
@@ -160,7 +172,15 @@ class Communication(Base):
     subject: Mapped[str | None] = mapped_column(String(500), nullable=True)
     content: Mapped[str] = mapped_column(Text, default="")
     tag: Mapped[str] = mapped_column(String(30), default="other", index=True)
-    attachment_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    attachment_file_id: Mapped[int | None] = mapped_column(
+        ForeignKey(
+            "bol_files.id",
+            ondelete="SET NULL",
+            name="fk_communications_attachment_file_id_bol_files",
+        ),
+        nullable=True,
+    )
+    attachment_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     extracted: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     external_id: Mapped[str | None] = mapped_column(String(300), nullable=True)
     archived: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -170,6 +190,11 @@ class Communication(Base):
     load: Mapped[Load | None] = relationship(
         back_populates="communications", foreign_keys=[load_id]
     )
+    attachment_file: Mapped[BolFile | None] = relationship(lazy="select")
+
+    @property
+    def has_attachment(self) -> bool:
+        return self.attachment_file_id is not None
 
 
 class StatusUpdate(Base):

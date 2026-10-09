@@ -296,7 +296,8 @@ class CommunicationOut(ORMModel):
     subject: str | None
     content: str
     tag: str
-    attachment_path: str | None
+    has_attachment: bool
+    attachment_filename: str | None
     extracted: dict[str, Any] | None
     external_id: str | None
     archived: bool

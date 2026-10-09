@@ -77,7 +77,8 @@ export type Communication = {
   subject: string | null;
   content: string;
   tag: string;
-  attachment_path: string | null;
+  has_attachment: boolean;
+  attachment_filename: string | null;
   extracted: Record<string, unknown> | null;
   external_id: string | null;
   archived: boolean;

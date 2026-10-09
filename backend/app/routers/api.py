@@ -5,7 +5,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
-from fastapi.responses import FileResponse, Response
+from fastapi.responses import Response
 from sqlalchemy import desc, inspect, select
 from sqlalchemy.orm import Session, joinedload
 from twilio.request_validator import RequestValidator
@@ -18,6 +18,7 @@ from app.integrations.fmcsa import FmcsaProvider, get_fmcsa_provider
 from app.integrations.llm import LlmProvider, get_llm_provider
 from app.integrations.sms import SmsProvider, get_sms_provider
 from app.models import (
+    BolFile,
     BrokerSettings,
     Carrier,
     Communication,
@@ -641,21 +642,18 @@ async def upload_bol(
         raise HTTPException(status_code=413, detail="PDF must not exceed 15 MB")
     if not contents.startswith(b"%PDF"):
         raise HTTPException(status_code=400, detail="Uploaded file is not a valid PDF")
-    target_dir = Path(get_settings().upload_dir)
-    target_dir.mkdir(parents=True, exist_ok=True)
-    file_path = (
-        target_dir / f"{utcnow().strftime('%Y%m%d%H%M%S%f')}-{Path(file.filename).name}"
-    )
-    file_path.write_bytes(contents)
-    extracted = llm.extract_bol(contents, file.filename).model_dump(mode="json")
+    filename = Path(file.filename).name[:255]
+    extracted = llm.extract_bol(contents, filename).model_dump(mode="json")
+    bol_file = BolFile(filename=filename, content=contents, size_bytes=len(contents))
     communication = Communication(
         channel="email",
         direction="inbound",
         from_addr="manual upload",
-        subject=f"BOL: {file.filename}",
+        subject=f"BOL: {filename}",
         content="Manual BOL upload",
         tag="bol",
-        attachment_path=str(file_path),
+        attachment_file=bol_file,
+        attachment_filename=filename,
         extracted=extracted,
     )
     db.add(communication)
@@ -725,7 +723,6 @@ def create_load_from_inbox(
         reference=reference,
         status="new",
         bol_source=communication.id,
-        bol_file_path=communication.attachment_path,
         **fields,
     )
     db.add(load)
@@ -738,15 +735,21 @@ def create_load_from_inbox(
 
 
 @protected.get("/files/bol/{communication_id}")
-def bol_file(communication_id: int, db: Session = Depends(get_db)) -> FileResponse:
+def bol_file(communication_id: int, db: Session = Depends(get_db)) -> Response:
     communication = db.get(Communication, communication_id)
-    if (
-        communication is None
-        or not communication.attachment_path
-        or not Path(communication.attachment_path).is_file()
-    ):
+    if communication is None or communication.attachment_file_id is None:
         raise HTTPException(status_code=404, detail="BOL file not found")
-    return FileResponse(communication.attachment_path, media_type="application/pdf")
+    bol_file = db.get(BolFile, communication.attachment_file_id)
+    if bol_file is None:
+        raise HTTPException(status_code=404, detail="BOL file not found")
+    filename = re.sub(
+        r"[^A-Za-z0-9._-]", "_", communication.attachment_filename or bol_file.filename
+    )
+    return Response(
+        content=bol_file.content,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
+    )
 
 
 @protected.post("/loads/{load_id}/send-tracking-link", response_model=CommunicationOut)
@@ -868,12 +871,7 @@ def _ingest_email_message(db: Session, message: dict, llm: LlmProvider) -> None:
     if pdfs:
         filename, content = pdfs[0]
         if content.startswith(b"%PDF") and len(content) <= 15 * 1024 * 1024:
-            folder = Path(get_settings().upload_dir)
-            folder.mkdir(parents=True, exist_ok=True)
-            path = (
-                folder / f"{utcnow().strftime('%Y%m%d%H%M%S%f')}-{Path(filename).name}"
-            )
-            path.write_bytes(content)
+            filename = Path(filename).name[:255]
             extracted = llm.extract_bol(content, filename).model_dump(mode="json")
             db.add(
                 Communication(
@@ -883,7 +881,10 @@ def _ingest_email_message(db: Session, message: dict, llm: LlmProvider) -> None:
                     subject=subject,
                     content=body,
                     tag="bol",
-                    attachment_path=str(path),
+                    attachment_file=BolFile(
+                        filename=filename, content=content, size_bytes=len(content)
+                    ),
+                    attachment_filename=filename,
                     extracted=extracted,
                     external_id=external_id,
                 )

@@ -2,7 +2,7 @@ from functools import lru_cache
 import os
 from pathlib import Path
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -44,7 +44,6 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-4-5"
     fmcsa_provider: str = "mock"
     fmcsa_webkey: str | None = None
-    upload_dir: str = "./data/uploads"
     env: str = "development"
 
     @field_validator(
@@ -66,6 +65,17 @@ class Settings(BaseSettings):
         if value.startswith("postgresql://"):
             return value.replace("postgresql://", "postgresql+psycopg://", 1)
         return value
+
+    @model_validator(mode="after")
+    def require_production_secret(self) -> "Settings":
+        if self.env.lower() == "production" and (
+            self.secret_key == "development-secret-change-me"
+            or len(self.secret_key) < 32
+        ):
+            raise ValueError(
+                "SECRET_KEY must be set to a random value of at least 32 characters in production"
+            )
+        return self
 
     @property
     def cors_origin_list(self) -> list[str]:

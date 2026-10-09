@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from app.config import get_settings
-from app.models import Communication, Load, ScheduledCheckIn, utcnow
+from app.models import BolFile, Communication, Load, ScheduledCheckIn, utcnow
 
 
 def test_auth_public_routes_and_twilio_signature(client, db, load_data, monkeypatch):
@@ -111,9 +111,10 @@ def test_frontend_static_serving_has_spa_fallback_without_shadowing_api(tmp_path
 
 
 def test_bol_upload_and_create_load(client, db):
+    pdf_content = b"%PDF-1.4 fake content"
     response = client.post(
         "/api/bol/upload",
-        files={"file": ("bol.pdf", b"%PDF-1.4 fake content", "application/pdf")},
+        files={"file": ("Böl of lading 2026.pdf", pdf_content, "application/pdf")},
     )
     assert response.status_code == 200, response.text
     communication = response.json()
@@ -121,6 +122,21 @@ def test_bol_upload_and_create_load(client, db):
         communication["tag"] == "bol"
         and communication["extracted"]["notes"] == "mock extraction"
     )
+    assert communication["has_attachment"] is True
+    assert communication["attachment_filename"] == "Böl of lading 2026.pdf"
+    communication_record = db.get(Communication, communication["id"])
+    stored_file = db.get(BolFile, communication_record.attachment_file_id)
+    assert stored_file.content == pdf_content
+    assert stored_file.size_bytes == len(pdf_content)
+
+    downloaded = client.get(f"/api/files/bol/{communication['id']}")
+    assert downloaded.content == pdf_content
+    assert downloaded.headers["content-type"] == "application/pdf"
+    assert (
+        downloaded.headers["content-disposition"]
+        == 'inline; filename="B_l_of_lading_2026.pdf"'
+    )
+
     assert (
         client.post(
             "/api/bol/upload",
@@ -132,8 +148,47 @@ def test_bol_upload_and_create_load(client, db):
     assert created.status_code == 201, created.text
     assert created.json()["reference"] == "TEST-BOL"
     assert created.json()["pickup_city"] == "Chicago"
+    assert db.get(Load, created.json()["id"]).bol_source == communication["id"]
     linked = db.get(Communication, communication["id"])
     assert linked.archived and linked.load_id == created.json()["id"]
+
+
+def test_bol_file_endpoint_returns_404_without_a_file(client, db):
+    communication = Communication(
+        channel="email",
+        direction="inbound",
+        content="No attachment",
+        tag="other",
+    )
+    db.add(communication)
+    db.commit()
+
+    assert client.get(f"/api/files/bol/{communication.id}").status_code == 404
+    assert client.get("/api/files/bol/99999").status_code == 404
+
+
+def test_email_pdf_ingest_stores_bol_file_in_database(db, providers):
+    from app.routers.api import _ingest_email_message
+
+    pdf_content = b"%PDF-1.4 email attachment"
+    _ingest_email_message(
+        db,
+        {
+            "from": "shipper@example.com",
+            "subject": "Bill of lading",
+            "body_text": "Attached",
+            "pdf_attachments": [("BOL.pdf", pdf_content)],
+        },
+        providers["llm"],
+    )
+
+    communication = db.scalar(select(Communication).where(Communication.tag == "bol"))
+    assert communication is not None
+    assert communication.has_attachment
+    assert communication.attachment_filename == "BOL.pdf"
+    stored_file = db.get(BolFile, communication.attachment_file_id)
+    assert stored_file.content == pdf_content
+    assert stored_file.size_bytes == len(pdf_content)
 
 
 def test_send_now_resends_no_reply_checkin_and_clears_alert(
