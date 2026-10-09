@@ -95,12 +95,12 @@ function InboxItem({
         {item.content}
       </p>
       {item.tag === "bol" && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-blue-50 p-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-blue-900">
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-brand-50 p-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-brand-900">
             <FileText className="h-4 w-4" />
             Bill of lading
             {typeof item.extracted?.confidence === "number" && (
-              <span className="text-xs font-medium text-blue-700">
+              <span className="text-xs font-medium text-brand-700">
                 · {Math.round(item.extracted.confidence * 100)}% confidence
               </span>
             )}
@@ -111,14 +111,14 @@ function InboxItem({
                 href={`/api/files/bol/${item.id}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex min-h-10 items-center rounded-lg px-3 text-xs font-bold text-blue-700 hover:bg-blue-100"
+                className="inline-flex min-h-10 items-center rounded-lg px-3 text-xs font-bold text-brand-700 hover:bg-brand-100"
               >
                 View PDF
               </a>
             )}
             <button
               onClick={() => onReview(item)}
-              className="min-h-10 rounded-lg bg-blue-600 px-3 text-xs font-bold text-white hover:bg-blue-700"
+              className="min-h-10 rounded-lg bg-brand-600 px-3 text-xs font-bold text-white hover:bg-brand-700"
             >
               Review BOL
             </button>
@@ -129,13 +129,13 @@ function InboxItem({
         <div className="mt-4 rounded-xl border border-slate-200 p-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-semibold text-slate-800">
-              Carrier MC <span className="font-mono text-blue-700">{mc}</span>
+              Carrier MC <span className="font-mono text-brand-700">{mc}</span>
             </p>
             {!carrier && (
               <button
                 onClick={() => verify.mutate()}
                 disabled={verify.isPending}
-                className="min-h-10 rounded-lg border border-blue-200 px-3 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                className="min-h-10 rounded-lg border border-brand-200 px-3 text-xs font-bold text-brand-700 hover:bg-brand-50 disabled:opacity-50"
               >
                 {verify.isPending ? "Checking…" : "Verify MC"}
               </button>
@@ -179,7 +179,7 @@ function InboxItem({
           </div>
           <Link
             to={`/status?load=${item.load_id}`}
-            className="inline-flex min-h-10 items-center gap-1 rounded-lg px-2 text-xs font-bold text-blue-700 hover:bg-blue-100"
+            className="inline-flex min-h-10 items-center gap-1 rounded-lg px-2 text-xs font-bold text-brand-700 hover:bg-brand-100"
           >
             View load
           </Link>
@@ -223,14 +223,14 @@ function BolReview({
       onClose={onClose}
       size="max-w-3xl"
     >
-      <div className="mb-5 rounded-xl bg-blue-50 p-4">
+      <div className="mb-5 rounded-xl bg-brand-50 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-bold text-blue-950">
+          <p className="text-sm font-bold text-brand-950">
             Extraction confidence: {Math.round(Number(extracted.confidence ?? 0) * 100)}%
           </p>
           {item.has_attachment && (
             <a
-              className="text-xs font-bold text-blue-700 underline underline-offset-2"
+              className="text-xs font-bold text-brand-700 underline underline-offset-2"
               href={`/api/files/bol/${item.id}`}
               target="_blank"
               rel="noreferrer"
@@ -240,7 +240,7 @@ function BolReview({
           )}
         </div>
         {Boolean(extracted.notes) && (
-          <p className="mt-1 text-xs leading-5 text-blue-800">{String(extracted.notes)}</p>
+          <p className="mt-1 text-xs leading-5 text-brand-800">{String(extracted.notes)}</p>
         )}
       </div>
       <form
@@ -270,7 +270,7 @@ function BolReview({
           <button
             type="submit"
             disabled={create.isPending || !draft.reference.trim()}
-            className="min-h-11 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+            className="min-h-11 rounded-xl bg-brand-600 px-5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50"
           >
             {create.isPending ? "Creating…" : "Create load"}
           </button>
@@ -317,7 +317,7 @@ function SimulationMenu() {
         onClick={() => setOpen((value) => !value)}
         className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 hover:bg-slate-50"
       >
-        <WandSparkles className="h-4 w-4 text-blue-600" />
+        <WandSparkles className="h-4 w-4 text-brand-600" />
         Simulate
       </button>
       {open && (
@@ -397,7 +397,7 @@ export default function Inbox() {
             <button
               onClick={() => fileInput.current?.click()}
               disabled={upload.isPending}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-blue-700 disabled:opacity-60"
+              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-bold text-white shadow-sm hover:bg-brand-700 disabled:opacity-60"
             >
               <Upload className="h-4 w-4" />
               {upload.isPending ? "Uploading…" : "Upload BOL"}
@@ -412,7 +412,7 @@ export default function Inbox() {
             onClick={() => setFilter(item)}
             className={`min-h-10 shrink-0 rounded-full px-4 text-sm font-semibold ${
               filter === item
-                ? "bg-blue-600 text-white"
+                ? "bg-brand-600 text-white"
                 : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
             }`}
           >

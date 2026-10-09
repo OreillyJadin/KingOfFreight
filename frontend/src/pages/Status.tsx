@@ -172,7 +172,7 @@ function CheckinTimeline({ checkins, load }: { checkins: CheckIn[]; load: Load }
               <button
                 onClick={() => send.mutate(checkin.id)}
                 disabled={send.isPending}
-                className="min-h-9 rounded-lg border border-blue-200 px-2.5 text-[11px] font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+                className="min-h-9 rounded-lg border border-brand-200 px-2.5 text-[11px] font-bold text-brand-700 hover:bg-brand-50 disabled:opacity-50"
               >
                 Send check-in now
               </button>
@@ -207,15 +207,15 @@ function StatusRail({ status }: { status: LoadStatus }) {
             <span
               className={`grid h-6 w-6 place-items-center rounded-full border-2 ${
                 isCurrent
-                  ? "border-blue-600 bg-blue-600 text-white"
+                  ? "border-brand-600 bg-brand-600 text-white"
                   : passed
-                    ? "border-blue-600 bg-white text-blue-600"
+                    ? "border-brand-600 bg-white text-brand-600"
                     : "border-slate-300 bg-white text-slate-300"
               }`}
             >
               {passed && !isCurrent ? <Check className="h-3 w-3" /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
             </span>
-            <span className={`text-center text-[10px] font-semibold leading-tight sm:text-[11px] ${isCurrent ? "text-blue-700" : "text-slate-500"}`}>
+            <span className={`text-center text-[10px] font-semibold leading-tight sm:text-[11px] ${isCurrent ? "text-brand-700" : "text-slate-500"}`}>
               {statusNames[step]}
             </span>
           </div>
@@ -274,15 +274,15 @@ function PreviewModal({
   return (
     <Modal title="Review customer update" eyebrow="Approval required" onClose={onClose} size="max-w-2xl">
       {checkin && (
-        <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
-          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-blue-700">Driver reply · parsed status</p>
-          <p className="mt-1 text-sm font-bold text-blue-950">
+        <div className="mb-5 rounded-xl border border-brand-200 bg-brand-50 p-4">
+          <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-brand-700">Driver reply · parsed status</p>
+          <p className="mt-1 text-sm font-bold text-brand-950">
             “{checkin.reply_raw_text || checkin.parsed_summary || "Reply received"}”{" "}
             <span className="font-semibold">→ {statusNames[update.status]}</span>
             {update.eta && <span className="font-semibold"> · ETA {formatDateTime(update.eta)}</span>}
           </p>
           {checkin.parsed_summary && checkin.parsed_summary !== checkin.reply_raw_text && (
-            <p className="mt-1 text-xs text-blue-800">{checkin.parsed_summary}</p>
+            <p className="mt-1 text-xs text-brand-800">{checkin.parsed_summary}</p>
           )}
         </div>
       )}
@@ -305,7 +305,7 @@ function PreviewModal({
             <input
               value={subject}
               onChange={(event) => setSubject(event.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
             />
           </label>
           <label>
@@ -313,7 +313,7 @@ function PreviewModal({
             <select
               value={channel}
               onChange={(event) => setChannel(event.target.value as "email" | "sms")}
-              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
             >
               <option value="email" disabled={!detail.customer_email}>Email</option>
               <option value="sms" disabled={!detail.customer_phone}>SMS</option>
@@ -326,7 +326,7 @@ function PreviewModal({
             rows={6}
             value={body}
             onChange={(event) => setBody(event.target.value)}
-            className="w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm leading-6 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            className="w-full resize-y rounded-xl border border-slate-300 px-3 py-2.5 text-sm leading-6 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
           />
         </label>
       </div>
@@ -350,7 +350,7 @@ function PreviewModal({
         <button
           onClick={() => approve.mutate()}
           disabled={approve.isPending || (channel === "email" ? !detail.customer_email : !detail.customer_phone)}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50"
         >
           <Send className="h-4 w-4" />
           {approve.isPending ? "Sending…" : "Approve & send"}
@@ -405,7 +405,7 @@ function StatusCard({ load }: { load: Load }) {
       <article
         id={`load-${data.id}`}
         className={`overflow-hidden rounded-2xl border bg-white shadow-card ${
-          isHighlighted ? "border-blue-400 ring-2 ring-blue-100" : "border-slate-200"
+          isHighlighted ? "border-brand-400 ring-2 ring-brand-100" : "border-slate-200"
         }`}
       >
         <div className="p-4 sm:p-5">
@@ -436,16 +436,16 @@ function StatusCard({ load }: { load: Load }) {
           {pending && (
             <button
               onClick={() => setPreview(pending)}
-              className="mt-4 block w-full rounded-xl border border-blue-200 bg-blue-50 p-3 text-left transition hover:bg-blue-100"
+              className="mt-4 block w-full rounded-xl border border-brand-200 bg-brand-50 p-3 text-left transition hover:bg-brand-100"
             >
               <span className="flex items-center justify-between gap-3">
-                <span className="text-xs font-bold uppercase tracking-wide text-blue-700">
+                <span className="text-xs font-bold uppercase tracking-wide text-brand-700">
                   Pending {pending.source === "checkin" ? "driver update" : "draft"}
                 </span>
-                <span className="text-xs font-bold text-blue-700">Review message →</span>
+                <span className="text-xs font-bold text-brand-700">Review message →</span>
               </span>
               {pending.source === "checkin" && (
-                <span className="mt-1 block text-sm font-semibold text-blue-950">
+                <span className="mt-1 block text-sm font-semibold text-brand-950">
                   Driver replied: “{data.checkins.find((item) => item.id === pending.checkin_id)?.reply_raw_text || pending.note || "Update"}”
                   <span className="font-normal"> → {statusNames[pending.status]}{pending.eta ? ` · ETA ${formatDateTime(pending.eta)}` : ""}</span>
                 </span>
@@ -462,7 +462,7 @@ function StatusCard({ load }: { load: Load }) {
                   disabled={setStatus.isPending}
                   className={`min-h-10 shrink-0 rounded-lg px-3 text-xs font-bold transition ${
                     data.status === status
-                      ? "bg-blue-600 text-white"
+                      ? "bg-brand-600 text-white"
                       : status === "delayed"
                         ? "border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
                         : "border border-slate-200 bg-white text-slate-600 hover:bg-slate-50"
@@ -485,7 +485,7 @@ function StatusCard({ load }: { load: Load }) {
           {ping && (
             <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 px-3 py-2.5">
               <div className="flex items-center gap-2 text-xs text-slate-600">
-                <MapPin className="h-4 w-4 text-blue-600" />
+                <MapPin className="h-4 w-4 text-brand-600" />
                 <span><strong className="text-slate-800">Last location</strong> {elapsed(ping.captured_at)}</span>
                 <span className="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-500">Internal only</span>
               </div>
@@ -493,7 +493,7 @@ function StatusCard({ load }: { load: Load }) {
                 href={`https://maps.google.com/?q=${Number(ping.lat)},${Number(ping.lng)}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex min-h-9 items-center gap-1 text-xs font-bold text-blue-700 hover:underline"
+                className="inline-flex min-h-9 items-center gap-1 text-xs font-bold text-brand-700 hover:underline"
               >
                 Map <ExternalLink className="h-3 w-3" />
               </a>
@@ -503,7 +503,7 @@ function StatusCard({ load }: { load: Load }) {
             <button
               onClick={() => tracking.mutate()}
               disabled={tracking.isPending || (!data.driver_phone && !data.driver_email && !data.dispatcher_phone && !data.dispatcher_email)}
-              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-blue-200 px-3 text-xs font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-brand-200 px-3 text-xs font-bold text-brand-700 hover:bg-brand-50 disabled:opacity-50"
             >
               <Send className="h-3.5 w-3.5" />
               {tracking.isPending ? "Sending…" : "Send tracking link"}
@@ -554,7 +554,7 @@ export default function Status() {
               type="checkbox"
               checked={includeDelivered}
               onChange={(event) => setIncludeDelivered(event.target.checked)}
-              className="h-4 w-4 accent-blue-600"
+              className="h-4 w-4 accent-brand-600"
             />
             Show delivered
           </label>

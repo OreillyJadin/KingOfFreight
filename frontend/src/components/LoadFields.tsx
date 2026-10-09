@@ -83,7 +83,7 @@ export default function LoadFields({
                       onChange={(event: ChangeEvent<HTMLInputElement>) =>
                         onChange(key, event.target.value)
                       }
-                      className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                      className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                     />
                     {stop && (
                       <div className="mt-1.5">
@@ -93,7 +93,7 @@ export default function LoadFields({
                           onChange={(event) =>
                             onChange(timezoneKey!, event.target.value)
                           }
-                          className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                          className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-700 outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                         >
                           <option value="">{autoLabel}</option>
                           {metadata?.zones.map((zone) => (

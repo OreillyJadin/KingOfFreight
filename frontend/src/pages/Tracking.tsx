@@ -121,14 +121,14 @@ export default function Tracking() {
   return (
     <main className="min-h-screen bg-canvas px-4 py-8 sm:grid sm:place-items-center sm:px-6 sm:py-12">
       <section className="mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-card">
-        <header className="bg-slate-950 px-6 pb-7 pt-6 text-white">
+        <header className="bg-brand-950 px-6 pb-7 pt-6 text-white">
           <div className="flex items-center gap-2 text-xs font-semibold text-slate-300">
-            <span className="grid h-8 w-8 place-items-center rounded-lg bg-blue-600 text-white">
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-white">
               <Truck className="h-4 w-4" />
             </span>
             {load.broker_company}
           </div>
-          <p className="mt-6 text-[11px] font-bold uppercase tracking-[0.16em] text-blue-300">
+          <p className="mt-6 text-[11px] font-bold uppercase tracking-[0.16em] text-brand-300">
             Driver location
           </p>
           <h1 className="mt-1 text-2xl font-extrabold tracking-tight">
@@ -137,8 +137,8 @@ export default function Tracking() {
           <p className="mt-2 text-sm text-slate-300">{lane}</p>
         </header>
         <div className="px-6 py-7">
-          <div className="mx-auto grid h-28 w-28 place-items-center rounded-full bg-blue-50">
-            <span className="grid h-20 w-20 place-items-center rounded-full bg-blue-100 text-blue-700">
+          <div className="mx-auto grid h-28 w-28 place-items-center rounded-full bg-brand-50">
+            <span className="grid h-20 w-20 place-items-center rounded-full bg-brand-100 text-brand-700">
               {shareState === "success" ? (
                 <CheckCircle2 className="h-9 w-9" />
               ) : shareState === "requesting" ? (
@@ -166,7 +166,7 @@ export default function Tracking() {
           <button
             onClick={shareLocation}
             disabled={shareState === "requesting"}
-            className="mt-6 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-blue-600 px-5 text-base font-bold text-white shadow-sm shadow-blue-200 transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-70"
+            className="mt-6 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 text-base font-bold text-white shadow-sm shadow-brand-200 transition hover:bg-brand-700 disabled:cursor-wait disabled:opacity-70"
           >
             {shareState === "requesting" ? (
               <LoaderCircle className="h-5 w-5 animate-spin" />

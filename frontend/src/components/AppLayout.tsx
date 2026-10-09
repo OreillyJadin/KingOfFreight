@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   Boxes,
+  Crown,
   LogOut,
   Mail,
   Settings,
@@ -134,14 +135,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
   return (
     <div className="min-h-screen bg-canvas pb-24 text-ink md:pb-0">
-      <header className="sticky top-0 z-30 border-b border-slate-200 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-30 border-b border-white/5 bg-brand-950/95 text-white shadow-[0_1px_0_rgba(255,255,255,0.04),0_8px_24px_rgba(18,26,61,0.18)] backdrop-blur">
         <div className="mx-auto flex h-[68px] max-w-6xl items-center justify-between px-4 sm:px-6">
           <NavLink to="/inbox" className="flex min-w-0 items-center gap-2.5">
-            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-blue-600 text-white shadow-sm shadow-blue-200">
-              <Truck className="h-5 w-5" />
+            <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-gradient-to-br from-gold-300 to-gold-500 text-brand-950 shadow-sm shadow-black/30">
+              <Crown className="h-5 w-5" strokeWidth={2.25} />
             </span>
-            <span className="truncate text-[17px] font-extrabold tracking-tight text-slate-900">
-              KingOfFreight
+            <span className="truncate text-[17px] font-extrabold tracking-tight text-white">
+              <span className="text-gold-300">King</span>OfFreight
             </span>
           </NavLink>
           <nav className="hidden h-full items-center gap-1 md:flex">
@@ -152,15 +153,23 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 className={({ isActive }) =>
                   `flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition ${
                     isActive
-                      ? "bg-blue-50 text-blue-700"
-                      : "text-slate-600 hover:bg-slate-50 hover:text-slate-900"
+                      ? "bg-white/10 text-white ring-1 ring-inset ring-white/15"
+                      : "text-white/65 hover:bg-white/5 hover:text-white"
                   }`
                 }
               >
-                {label}
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-bold text-slate-500">
-                  {countFor(key)}
-                </span>
+                {({ isActive }) => (
+                  <>
+                    {label}
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
+                        isActive ? "bg-gold-400 text-brand-950" : "bg-white/10 text-white/70"
+                      }`}
+                    >
+                      {countFor(key)}
+                    </span>
+                  </>
+                )}
               </NavLink>
             ))}
           </nav>
@@ -168,12 +177,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <div className="relative">
               <button
                 onClick={() => setAlertsOpen((open) => !open)}
-                className="relative grid h-11 w-11 place-items-center rounded-xl text-slate-600 hover:bg-slate-100"
+                className="relative grid h-11 w-11 place-items-center rounded-xl text-white/75 hover:bg-white/10 hover:text-white"
                 aria-label={`Alerts, ${totalAttention} open`}
               >
                 <Bell className="h-5 w-5" />
                 {totalAttention > 0 && (
-                  <span className="absolute right-1 top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-rose-600 px-1 text-[10px] font-bold text-white">
+                  <span className="absolute right-1 top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-rose-500 px-1 text-[10px] font-bold text-white ring-2 ring-brand-950">
                     {totalAttention > 9 ? "9+" : totalAttention}
                   </span>
                 )}
@@ -191,8 +200,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               className={({ isActive }) =>
                 `grid h-11 w-11 place-items-center rounded-xl ${
                   isActive
-                    ? "bg-blue-50 text-blue-700"
-                    : "text-slate-600 hover:bg-slate-100"
+                    ? "bg-white/10 text-white ring-1 ring-inset ring-white/15"
+                    : "text-white/75 hover:bg-white/10 hover:text-white"
                 }`
               }
               aria-label="Settings"
@@ -202,7 +211,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </NavLink>
             <button
               onClick={() => void logout()}
-              className="flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-slate-600 hover:bg-slate-100"
+              className="flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-white/75 hover:bg-white/10 hover:text-white"
               aria-label="Log out"
               title="Log out"
             >
@@ -223,14 +232,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               to={to}
               className={({ isActive }) =>
                 `flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-semibold ${
-                  isActive ? "text-blue-700" : "text-slate-500"
+                  isActive ? "text-brand-700" : "text-slate-500"
                 }`
               }
             >
               <span className="relative">
                 <Icon className="h-5 w-5" />
                 {countFor(key) > 0 && (
-                  <span className="absolute -right-2 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-blue-600 px-1 text-[9px] font-bold text-white">
+                  <span className="absolute -right-2 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-brand-600 px-1 text-[9px] font-bold text-white">
                     {countFor(key) > 9 ? "9+" : countFor(key)}
                   </span>
                 )}
