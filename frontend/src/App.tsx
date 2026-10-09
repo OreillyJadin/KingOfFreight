@@ -14,7 +14,7 @@ function ProtectedApp() {
   const auth = useQuery({ queryKey: ["auth"], queryFn: api.me });
   if (auth.isPending) {
     return (
-      <div className="grid min-h-screen place-items-center bg-canvas text-slate-500">
+      <div className="grid min-h-screen place-items-center bg-bg text-muted">
         <span className="animate-pulse text-sm font-medium">Loading workspace…</span>
       </div>
     );

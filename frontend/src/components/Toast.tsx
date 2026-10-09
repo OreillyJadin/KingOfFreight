@@ -22,17 +22,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {items.map((item) => (
           <div
             key={item.id}
-            className="flex items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xl"
+            className="flex items-start gap-3 rounded-xl border border-line bg-surface px-4 py-3 shadow-xl"
             role="status"
           >
             {item.tone === "success" ? (
-              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" />
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-ok-ink" />
             ) : (
-              <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+              <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-danger-ink" />
             )}
-            <span className="flex-1 text-sm text-slate-700">{item.message}</span>
+            <span className="flex-1 text-sm text-fg-2">{item.message}</span>
             <button
-              className="grid h-7 w-7 place-items-center rounded-lg text-slate-400 hover:bg-slate-100"
+              className="grid h-7 w-7 place-items-center rounded-lg text-subtle hover:bg-surface-3"
               aria-label="Dismiss notification"
               onClick={() => setItems((current) => current.filter((toast) => toast.id !== item.id))}
             >
