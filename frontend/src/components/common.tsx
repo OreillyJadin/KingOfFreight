@@ -72,7 +72,7 @@ export function PageHeading({
   return (
     <div className="mb-6 flex flex-col gap-4 sm:mb-7 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold-600">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold-700">
           {eyebrow}
         </p>
         <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-ink sm:text-[30px]">

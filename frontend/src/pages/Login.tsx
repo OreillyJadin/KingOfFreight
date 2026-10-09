@@ -52,10 +52,10 @@ export default function Login() {
             <span className="grid h-11 w-11 place-items-center rounded-xl bg-gradient-to-br from-gold-300 to-gold-500 text-brand-950">
               <Crown className="h-6 w-6" strokeWidth={2.25} />
             </span>
-            <span className="text-lg font-extrabold text-slate-900"><span className="text-gold-600">King</span>OfFreight</span>
+            <span className="text-lg font-extrabold text-slate-900"><span className="text-gold-700">King</span>OfFreight</span>
           </div>
           <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-card sm:p-8 md:border-0 md:p-0 md:shadow-none">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-600">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-gold-700">
               Broker workspace
             </p>
             <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-slate-900">
