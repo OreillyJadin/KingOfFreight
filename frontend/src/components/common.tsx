@@ -7,7 +7,7 @@ const statusStyle: Record<LoadStatus, string> = {
   new: "bg-slate-100 text-slate-700",
   posted: "bg-slate-100 text-slate-700",
   booked: "bg-slate-100 text-slate-700",
-  picked_up: "bg-blue-100 text-blue-800",
+  picked_up: "bg-brand-100 text-brand-800",
   in_transit: "bg-indigo-100 text-indigo-800",
   delayed: "bg-amber-100 text-amber-800",
   delivered: "bg-emerald-100 text-emerald-800",
@@ -50,7 +50,7 @@ export function Lane({
 }) {
   return (
     <div className="flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-700">
-      {!compact && <MapPin className="h-4 w-4 shrink-0 text-blue-600" />}
+      {!compact && <MapPin className="h-4 w-4 shrink-0 text-brand-600" />}
       <span className="truncate">{from}</span>
       <ArrowRight className="h-3.5 w-3.5 shrink-0 text-slate-400" />
       <span className="truncate">{to}</span>
@@ -72,10 +72,10 @@ export function PageHeading({
   return (
     <div className="mb-6 flex flex-col gap-4 sm:mb-7 sm:flex-row sm:items-end sm:justify-between">
       <div>
-        <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-blue-600">
+        <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-gold-600">
           {eyebrow}
         </p>
-        <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-slate-900 sm:text-[28px]">
+        <h1 className="mt-1 text-2xl font-extrabold tracking-tight text-ink sm:text-[30px]">
           {title}
         </h1>
         <p className="mt-1.5 text-sm text-slate-500">{description}</p>

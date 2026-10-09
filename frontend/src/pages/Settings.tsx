@@ -133,7 +133,7 @@ export default function Settings() {
                     onClick={() => change("checkin_default_channel", channel)}
                     className={`min-h-10 rounded-lg px-4 text-sm font-semibold capitalize ${
                       form.checkin_default_channel === channel
-                        ? "bg-white text-blue-700 shadow-sm"
+                        ? "bg-white text-brand-700 shadow-sm"
                         : "text-slate-600"
                     }`}
                   >
@@ -191,7 +191,7 @@ export default function Settings() {
         <button
           type="submit"
           disabled={!dirty || save.isPending}
-          className="min-h-11 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+          className="min-h-11 rounded-xl bg-brand-600 px-5 text-sm font-bold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
           {save.isPending ? "Saving…" : "Save settings"}
         </button>

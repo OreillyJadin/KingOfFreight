@@ -126,13 +126,13 @@ function BookingModal({
                 setCarrier(null);
               }}
               placeholder="e.g. 123456"
-              className="h-11 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className="h-11 min-w-0 flex-1 rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
             />
             <button
               type="button"
               onClick={() => verify.mutate()}
               disabled={!mc.trim() || verify.isPending}
-              className="min-h-11 shrink-0 rounded-xl border border-blue-200 px-4 text-sm font-bold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+              className="min-h-11 shrink-0 rounded-xl border border-brand-200 px-4 text-sm font-bold text-brand-700 hover:bg-brand-50 disabled:opacity-50"
             >
               {verify.isPending ? "Checking…" : "Verify"}
             </button>
@@ -175,7 +175,7 @@ function BookingModal({
               required
               value={form.carrier_rate}
               onChange={(event) => change("carrier_rate", event.target.value)}
-              className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
             />
           </label>
           <label>
@@ -187,7 +187,7 @@ function BookingModal({
               required
               value={form.customer_rate}
               onChange={(event) => change("customer_rate", event.target.value)}
-              className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
             />
           </label>
         </div>
@@ -214,7 +214,7 @@ function BookingModal({
                   type={type}
                   value={form[key]}
                   onChange={(event) => change(key, event.target.value)}
-                  className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
                 />
               </label>
             ))}
@@ -239,7 +239,7 @@ function BookingModal({
                 placeholder={String(settings.data?.checkin_offset_minutes ?? 60)}
                 value={form.checkin_offset_minutes}
                 onChange={(event) => change("checkin_offset_minutes", event.target.value)}
-                className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="h-10 w-full rounded-lg border border-slate-300 px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
               />
               <span className="mt-1 block text-xs text-slate-500">
                 Default: {settings.data?.checkin_offset_minutes ?? 60} min
@@ -250,7 +250,7 @@ function BookingModal({
               <select
                 value={form.checkin_channel}
                 onChange={(event) => change("checkin_channel", event.target.value)}
-                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none focus:border-brand-500 focus:ring-2 focus:ring-brand-100"
               >
                 <option value="">Auto</option>
                 <option value="sms">SMS</option>
@@ -267,7 +267,7 @@ function BookingModal({
           <button
             type="submit"
             disabled={!carrier || !contactReady || book.isPending || (carrier.flag === "red" && !override)}
-            className="min-h-11 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            className="min-h-11 rounded-xl bg-brand-600 px-5 text-sm font-bold text-white hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {book.isPending ? "Booking…" : "Book carrier"}
           </button>
@@ -304,7 +304,7 @@ function NewLoadModal({ onClose }: { onClose: () => void }) {
         {error && <p className="mt-3 text-sm text-rose-700">{error}</p>}
         <div className="mt-5 flex flex-col-reverse gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
           <button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-slate-300 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Cancel</button>
-          <button type="submit" disabled={!draft.reference.trim() || create.isPending} className="min-h-11 rounded-xl bg-blue-600 px-5 text-sm font-bold text-white hover:bg-blue-700 disabled:opacity-50">
+          <button type="submit" disabled={!draft.reference.trim() || create.isPending} className="min-h-11 rounded-xl bg-brand-600 px-5 text-sm font-bold text-white hover:bg-brand-700 disabled:opacity-50">
             {create.isPending ? "Saving…" : "Create load"}
           </button>
         </div>
@@ -381,7 +381,7 @@ function LoadCard({
           <button
             onClick={() => post.mutate()}
             disabled={post.isPending}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-blue-200 px-3 text-sm font-semibold text-blue-700 hover:bg-blue-50 disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-brand-200 px-3 text-sm font-semibold text-brand-700 hover:bg-brand-50 disabled:opacity-50"
           >
             <ArrowDownToLine className="h-4 w-4" />
             Mark posted
@@ -389,7 +389,7 @@ function LoadCard({
         )}
         <button
           onClick={() => onBook(load)}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-bold text-white hover:bg-blue-700"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-brand-600 px-4 text-sm font-bold text-white hover:bg-brand-700"
         >
           <Check className="h-4 w-4" />
           Book carrier
