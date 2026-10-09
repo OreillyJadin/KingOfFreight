@@ -1,3 +1,4 @@
+import { Loader2 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { api } from "./api";
@@ -15,7 +16,7 @@ function ProtectedApp() {
   if (auth.isPending) {
     return (
       <div className="grid min-h-screen place-items-center bg-bg text-muted">
-        <span className="animate-pulse text-sm font-medium">Loading workspace…</span>
+        <Loader2 className="h-5 w-5 animate-spin" />
       </div>
     );
   }

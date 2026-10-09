@@ -14,6 +14,7 @@ import { useToast } from "../useToast";
 import LoadFields from "../components/LoadFields";
 import Modal from "../components/Modal";
 import { EmptyState, ErrorState, FlagBadge, Lane, PageHeading, StatusBadge } from "../components/common";
+import { Button, Card, CardListSkeleton, Input, Select } from "../components/ui";
 import { cityState, formatDateTime, formatMoney } from "../utils";
 import { draftFrom, payloadFromDraft, type LoadDraft } from "../load-form";
 import type { BookPayload, Carrier, Load, NewLoad } from "../types";
@@ -114,28 +115,51 @@ function BookingModal({
     });
   }
   return (
-    <Modal title={`Book carrier · ${load.reference}`} eyebrow="Carrier assignment" onClose={onClose} size="max-w-3xl">
-      <form onSubmit={submit} className="space-y-5">
+    <Modal
+      title={`Book carrier · ${load.reference}`}
+      eyebrow="Carrier assignment"
+      onClose={onClose}
+      size="max-w-3xl"
+      footer={
+        <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="book-carrier-form"
+            variant="primary"
+            disabled={!carrier || !contactReady || book.isPending || (carrier.flag === "red" && !override)}
+            loading={book.isPending}
+          >
+            {book.isPending ? "Booking…" : "Book carrier"}
+          </Button>
+        </div>
+      }
+    >
+      <form id="book-carrier-form" onSubmit={submit} className="space-y-5">
         <div>
           <label className="mb-1.5 block text-xs font-semibold text-fg-2">Carrier MC number</label>
           <div className="flex gap-2">
-            <input
+            <Input
               value={mc}
               onChange={(event) => {
                 setMc(event.target.value);
                 setCarrier(null);
               }}
               placeholder="e.g. 123456"
-              className="h-11 min-w-0 flex-1 rounded-xl border border-line-strong px-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
+              className="h-11 min-w-0 flex-1 rounded-xl"
             />
-            <button
+            <Button
               type="button"
               onClick={() => verify.mutate()}
               disabled={!mc.trim() || verify.isPending}
-              className="min-h-11 shrink-0 rounded-xl border border-accent/40 px-4 text-sm font-bold text-accent-ink hover:bg-accent/12 disabled:opacity-50"
+              loading={verify.isPending}
+              variant="secondary"
+              className="shrink-0"
             >
               {verify.isPending ? "Checking…" : "Verify"}
-            </button>
+            </Button>
           </div>
           {carrier && (
             <div className="mt-3 rounded-xl border border-line bg-surface-2 p-3">
@@ -168,26 +192,26 @@ function BookingModal({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <label>
             <span className="mb-1.5 block text-xs font-semibold text-fg-2">Carrier rate ($)</span>
-            <input
+            <Input
               type="number"
               min="0"
               step="0.01"
               required
               value={form.carrier_rate}
               onChange={(event) => change("carrier_rate", event.target.value)}
-              className="h-11 w-full rounded-xl border border-line-strong px-3 text-sm tabular-nums outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
+              className="h-11 rounded-xl tabular-nums"
             />
           </label>
           <label>
             <span className="mb-1.5 block text-xs font-semibold text-fg-2">Customer rate ($)</span>
-            <input
+            <Input
               type="number"
               min="0"
               step="0.01"
               required
               value={form.customer_rate}
               onChange={(event) => change("customer_rate", event.target.value)}
-              className="h-11 w-full rounded-xl border border-line-strong px-3 text-sm tabular-nums outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
+              className="h-11 rounded-xl tabular-nums"
             />
           </label>
         </div>
@@ -210,11 +234,11 @@ function BookingModal({
             ] as const).map(([key, label, type]) => (
               <label key={key}>
                 <span className="mb-1.5 block text-xs font-semibold text-fg-2">{label}</span>
-                <input
+                <Input
                   type={type}
                   value={form[key]}
                   onChange={(event) => change(key, event.target.value)}
-                  className="h-10 w-full rounded-lg border border-line-strong px-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
+                  className="h-10"
                 />
               </label>
             ))}
@@ -233,13 +257,13 @@ function BookingModal({
           <div className="grid gap-3 border-t border-line/60 p-3 sm:grid-cols-2">
             <label>
               <span className="mb-1.5 block text-xs font-semibold text-fg-2">Offset minutes</span>
-              <input
+              <Input
                 type="number"
                 min="0"
                 placeholder={String(settings.data?.checkin_offset_minutes ?? 60)}
                 value={form.checkin_offset_minutes}
                 onChange={(event) => change("checkin_offset_minutes", event.target.value)}
-                className="h-10 w-full rounded-lg border border-line-strong px-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
+                className="h-10"
               />
               <span className="mt-1 block text-xs text-muted">
                 Default: {settings.data?.checkin_offset_minutes ?? 60} min
@@ -247,31 +271,19 @@ function BookingModal({
             </label>
             <label>
               <span className="mb-1.5 block text-xs font-semibold text-fg-2">Check-in channel</span>
-              <select
+              <Select
                 value={form.checkin_channel}
                 onChange={(event) => change("checkin_channel", event.target.value)}
-                className="h-10 w-full rounded-lg border border-line-strong bg-surface px-3 text-sm outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
+                className="h-10"
               >
                 <option value="">Auto</option>
                 <option value="sms">SMS</option>
                 <option value="email">Email</option>
-              </select>
+              </Select>
             </label>
           </div>
         </details>
         {error && <p className="text-sm text-danger-ink">{error}</p>}
-        <div className="flex flex-col-reverse gap-2 border-t border-line/60 pt-4 sm:flex-row sm:justify-end">
-          <button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-line-strong px-4 text-sm font-semibold text-fg-2 hover:bg-surface-2">
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={!carrier || !contactReady || book.isPending || (carrier.flag === "red" && !override)}
-            className="min-h-11 rounded-xl bg-accent px-5 text-sm font-bold text-on-accent hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {book.isPending ? "Booking…" : "Book carrier"}
-          </button>
-        </div>
       </form>
     </Modal>
   );
@@ -292,8 +304,29 @@ function NewLoadModal({ onClose }: { onClose: () => void }) {
     onError: (issue: Error) => setError(issue.message),
   });
   return (
-    <Modal title="Create a load" eyebrow="Manual entry" onClose={onClose} size="max-w-3xl">
-      <form onSubmit={(event) => { event.preventDefault(); create.mutate(); }}>
+    <Modal
+      title="Create a load"
+      eyebrow="Manual entry"
+      onClose={onClose}
+      size="max-w-3xl"
+      footer={
+        <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="new-load-form"
+            variant="primary"
+            disabled={!draft.reference.trim() || create.isPending}
+            loading={create.isPending}
+          >
+            {create.isPending ? "Saving…" : "Create load"}
+          </Button>
+        </div>
+      }
+    >
+      <form id="new-load-form" onSubmit={(event) => { event.preventDefault(); create.mutate(); }}>
         <div className="max-h-[58dvh] overflow-y-auto pr-1">
           <LoadFields
             value={draft}
@@ -302,12 +335,6 @@ function NewLoadModal({ onClose }: { onClose: () => void }) {
           />
         </div>
         {error && <p className="mt-3 text-sm text-danger-ink">{error}</p>}
-        <div className="mt-5 flex flex-col-reverse gap-2 border-t border-line/60 pt-4 sm:flex-row sm:justify-end">
-          <button type="button" onClick={onClose} className="min-h-11 rounded-xl border border-line-strong px-4 text-sm font-semibold text-fg-2 hover:bg-surface-2">Cancel</button>
-          <button type="submit" disabled={!draft.reference.trim() || create.isPending} className="min-h-11 rounded-xl bg-accent px-5 text-sm font-bold text-on-accent hover:bg-accent-hover disabled:opacity-50">
-            {create.isPending ? "Saving…" : "Create load"}
-          </button>
-        </div>
       </form>
     </Modal>
   );
@@ -340,7 +367,7 @@ function LoadCard({
     }
   }
   return (
-    <article className="rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-5">
+    <Card as="article" className="p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-subtle">Load</p>
@@ -370,32 +397,34 @@ function LoadCard({
         <div className="col-span-2"><span className="text-subtle">Customer</span><p className="mt-1 font-semibold text-fg-2">{load.customer_name || "Not assigned"}</p></div>
       </div>
       <div className="mt-5 flex flex-col gap-2 border-t border-line/60 pt-4 sm:flex-row">
-        <button
+        <Button
           onClick={() => void copyPost()}
-          className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl border border-line-strong px-3 text-sm font-semibold text-fg-2 hover:bg-surface-2"
+          variant="secondary"
+          icon={Clipboard}
+          className="flex-1"
         >
-          <Clipboard className="h-4 w-4" />
           Copy TruckStop post
-        </button>
+        </Button>
         {load.status === "new" && (
-          <button
+          <Button
             onClick={() => post.mutate()}
             disabled={post.isPending}
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-accent/40 px-3 text-sm font-semibold text-accent-ink hover:bg-accent/12 disabled:opacity-50"
+            loading={post.isPending}
+            variant="secondary"
+            icon={ArrowDownToLine}
           >
-            <ArrowDownToLine className="h-4 w-4" />
             Mark posted
-          </button>
+          </Button>
         )}
-        <button
+        <Button
           onClick={() => onBook(load)}
-          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-bold text-on-accent hover:bg-accent-hover"
+          variant="primary"
+          icon={Check}
         >
-          <Check className="h-4 w-4" />
           Book carrier
-        </button>
+        </Button>
       </div>
-    </article>
+    </Card>
   );
 }
 
@@ -414,19 +443,23 @@ export default function TruckStop() {
         title="TruckStop"
         description="Prepare, post, and book your available loads."
         action={
-          <button
+          <Button
             onClick={() => setNewLoad(true)}
-            className="inline-flex min-h-11 items-center gap-2 self-start rounded-xl border border-line-strong bg-surface px-4 text-sm font-semibold text-fg-2 hover:bg-surface-2 sm:self-auto"
+            variant="primary"
+            icon={Plus}
+            className="self-start sm:self-auto"
           >
-            <Plus className="h-4 w-4" />
             New load
-          </button>
+          </Button>
         }
       />
       {loads.isError ? (
-        <ErrorState message={(loads.error as Error).message} />
+        <ErrorState
+          message={(loads.error as Error).message}
+          onRetry={() => void loads.refetch()}
+        />
       ) : loads.isPending ? (
-        <div className="grid min-h-40 place-items-center text-sm text-muted">Loading loads…</div>
+        <CardListSkeleton />
       ) : loads.data.length === 0 ? (
         <EmptyState icon={Truck} title="No open loads" description="Create a load or review a BOL to add freight to TruckStop." />
       ) : (

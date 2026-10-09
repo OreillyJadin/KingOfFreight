@@ -9,6 +9,7 @@ import {
 import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { api } from "../api";
+import { Button, Card } from "../components/ui";
 import { cityState } from "../utils";
 
 type ShareState =
@@ -105,7 +106,7 @@ export default function Tracking() {
   if (summary.isError) {
     return (
       <main className="grid min-h-screen place-items-center bg-bg px-5">
-        <section className="w-full max-w-sm rounded-3xl border border-line bg-surface p-7 text-center shadow-card">
+        <Card as="section" className="w-full max-w-sm rounded-3xl p-7 text-center shadow-card">
           <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-surface-3 text-muted">
             <MapPin className="h-6 w-6" />
           </span>
@@ -115,7 +116,7 @@ export default function Tracking() {
           <p className="mt-2 text-sm leading-6 text-muted">
             Please contact your broker for an updated tracking link.
           </p>
-        </section>
+        </Card>
       </main>
     );
   }
@@ -123,7 +124,7 @@ export default function Tracking() {
   const lane = `${cityState(load.pickup_city, load.pickup_state)} → ${cityState(load.delivery_city, load.delivery_state)}`;
   return (
     <main className="min-h-screen bg-bg px-4 py-8 sm:grid sm:place-items-center sm:px-6 sm:py-12">
-      <section className="mx-auto w-full max-w-md overflow-hidden rounded-3xl border border-line bg-surface shadow-card">
+      <Card as="section" className="mx-auto w-full max-w-md overflow-hidden rounded-3xl p-0 shadow-card">
         <header className="bg-hero px-6 pb-7 pt-6 text-hero-fg">
           <div className="flex items-center gap-2 text-xs font-semibold text-hero-fg/70">
             <span className="grid h-8 w-8 place-items-center rounded-lg bg-accent text-on-accent">
@@ -131,7 +132,7 @@ export default function Tracking() {
             </span>
             {load.broker_company}
           </div>
-          <p className="mt-6 text-[11px] font-bold uppercase tracking-[0.16em] text-accent">
+          <p className="mt-6 text-[11px] font-bold uppercase tracking-[0.16em] text-hero-fg/70">
             Driver location
           </p>
           <h1 className="mt-1 text-2xl font-extrabold tracking-tight">
@@ -166,10 +167,13 @@ export default function Tracking() {
               </p>
             </div>
           )}
-          <button
+          <Button
             onClick={shareLocation}
             disabled={shareState === "requesting"}
-            className="mt-6 flex min-h-14 w-full items-center justify-center gap-2 rounded-2xl bg-accent px-5 text-base font-bold text-on-accent shadow-sm transition hover:bg-accent-hover disabled:cursor-wait disabled:opacity-70"
+            variant="primary"
+            full
+            size="lg"
+            className="mt-6 min-h-14 rounded-2xl text-base shadow-sm disabled:cursor-wait disabled:opacity-70"
           >
             {shareState === "requesting" ? (
               <LoaderCircle className="h-5 w-5 animate-spin" />
@@ -177,7 +181,7 @@ export default function Tracking() {
               <MapPin className="h-5 w-5" />
             )}
             {shareState === "requesting" ? "Finding your location…" : "Share my location"}
-          </button>
+          </Button>
           {shareState === "denied" && (
             <p className="mt-3 rounded-xl bg-warn/10 px-3 py-2.5 text-xs leading-5 text-warn-ink">
               Location access was denied. Enable location permissions in your browser settings, then try again.
@@ -197,7 +201,7 @@ export default function Tracking() {
             Location updates are sent no more than once every 5 minutes.
           </p>
         </div>
-      </section>
+      </Card>
     </main>
   );
 }

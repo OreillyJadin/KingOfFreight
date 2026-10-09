@@ -4,6 +4,7 @@ import { ArrowRight, LockKeyhole } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useToast } from "../useToast";
+import { Button, Card, Input } from "../components/ui";
 import { Wordmark } from "../components/Brand";
 import ThemeToggle from "../components/ThemeToggle";
 
@@ -54,8 +55,8 @@ export default function Login() {
           <div className="mb-9 md:hidden">
             <Wordmark markClassName="h-11 w-11 text-accent" />
           </div>
-          <div className="rounded-2xl border border-line bg-surface p-6 shadow-card sm:p-8 md:border-0 md:bg-transparent md:p-0 md:shadow-none">
-            <p className="text-xs font-bold uppercase tracking-[0.18em] text-accent-ink">
+          <Card className="rounded-2xl p-6 sm:p-8 md:border-0 md:bg-transparent md:p-0 md:shadow-none">
+            <p className="text-xs font-bold uppercase tracking-[0.18em] text-muted">
               Broker workspace
             </p>
             <h2 className="mt-2 text-3xl font-extrabold tracking-tight text-fg">
@@ -78,7 +79,7 @@ export default function Login() {
                 </span>
                 <span className="relative block">
                   <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
-                  <input
+                  <Input
                     autoFocus
                     required
                     type="password"
@@ -86,7 +87,7 @@ export default function Login() {
                     value={password}
                     onChange={(event) => setPassword(event.target.value)}
                     placeholder="Enter your password"
-                    className="h-12 w-full rounded-xl border border-line-strong bg-surface pl-10 pr-3 text-sm text-fg outline-none transition placeholder:text-subtle focus:border-accent focus:ring-4 focus:ring-accent/25"
+                    className="h-12 pl-10 pr-3"
                   />
                 </span>
               </label>
@@ -95,16 +96,19 @@ export default function Login() {
                   {error}
                 </p>
               )}
-              <button
+              <Button
                 type="submit"
                 disabled={login.isPending}
-                className="flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-bold text-on-accent shadow-sm transition hover:bg-accent-hover disabled:cursor-wait disabled:opacity-70"
+                loading={login.isPending}
+                variant="primary"
+                full
+                className="h-12 shadow-sm disabled:cursor-wait disabled:opacity-70"
               >
                 {login.isPending ? "Signing in…" : "Sign in"}
                 {!login.isPending && <ArrowRight className="h-4 w-4" />}
-              </button>
+              </Button>
             </form>
-          </div>
+          </Card>
           <p className="mt-6 text-center text-xs text-subtle">
             Secure broker access · Single-user workspace
           </p>

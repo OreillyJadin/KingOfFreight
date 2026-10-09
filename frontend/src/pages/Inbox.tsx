@@ -14,7 +14,16 @@ import { api } from "../api";
 import { useToast } from "../useToast";
 import LoadFields from "../components/LoadFields";
 import Modal from "../components/Modal";
-import { EmptyState, ErrorState, PageHeading, StatusBadge } from "../components/common";
+import { EmptyState, ErrorState, FlagBadge, PageHeading, StatusBadge } from "../components/common";
+import {
+  Badge,
+  Button,
+  Card,
+  CardListSkeleton,
+  Input,
+  Tabs,
+  buttonClass,
+} from "../components/ui";
 import type { Carrier, Communication } from "../types";
 import { draftFrom, payloadFromDraft, type LoadDraft } from "../load-form";
 import { formatShortDateTime } from "../utils";
@@ -63,13 +72,13 @@ function InboxItem({
   );
   const tagLabel = item.tag.replaceAll("_", " ");
   return (
-    <article className="rounded-2xl border border-line bg-surface p-4 shadow-card sm:p-5">
+    <Card as="article" className="p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="rounded-full bg-surface-3 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-fg-2">
+            <Badge className="uppercase tracking-wide">
               {tagLabel}
-            </span>
+            </Badge>
             <span className="text-xs text-subtle">
               {formatShortDateTime(item.created_at)}
             </span>
@@ -81,26 +90,27 @@ function InboxItem({
             From {item.from_addr || "Unknown sender"}
           </p>
         </div>
-        <button
+        <Button
           onClick={() => archive.mutate()}
           disabled={archive.isPending}
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl text-muted hover:bg-surface-3 disabled:opacity-50"
+          loading={archive.isPending}
+          variant="ghost"
+          icon={Archive}
+          className="!w-11 !px-0 shrink-0 text-muted hover:bg-surface-3"
           aria-label="Archive message"
           title="Archive"
-        >
-          <Archive className="h-4 w-4" />
-        </button>
+        />
       </div>
       <p className="mt-4 whitespace-pre-line text-sm leading-6 text-fg-2">
         {item.content}
       </p>
       {item.tag === "bol" && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-accent/12 p-3">
-          <div className="flex items-center gap-2 text-sm font-semibold text-accent-ink">
-            <FileText className="h-4 w-4" />
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line bg-surface-2 p-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-fg-2">
+            <FileText className="h-4 w-4 text-muted" />
             Bill of lading
             {typeof item.extracted?.confidence === "number" && (
-              <span className="text-xs font-medium text-accent-ink">
+              <span className="text-xs font-medium text-fg-2">
                 · {Math.round(item.extracted.confidence * 100)}% confidence
               </span>
             )}
@@ -111,17 +121,19 @@ function InboxItem({
                 href={`/api/files/bol/${item.id}`}
                 target="_blank"
                 rel="noreferrer"
-                className="inline-flex min-h-10 items-center rounded-lg px-3 text-xs font-bold text-accent-ink hover:bg-accent/12"
+                className={buttonClass("ghost", "sm", "text-fg-2")}
               >
                 View PDF
               </a>
             )}
-            <button
+            <Button
               onClick={() => onReview(item)}
-              className="min-h-10 rounded-lg bg-accent px-3 text-xs font-bold text-on-accent hover:bg-accent-hover"
+              variant="primary"
+              size="sm"
+              className="min-h-10"
             >
               Review BOL
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -129,16 +141,19 @@ function InboxItem({
         <div className="mt-4 rounded-xl border border-line p-3">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <p className="text-sm font-semibold text-fg">
-              Carrier MC <span className="font-mono text-accent-ink">{mc}</span>
+              Carrier MC <span className="font-mono tabular-nums text-fg">{mc}</span>
             </p>
             {!carrier && (
-              <button
+              <Button
                 onClick={() => verify.mutate()}
                 disabled={verify.isPending}
-                className="min-h-10 rounded-lg border border-accent/40 px-3 text-xs font-bold text-accent-ink hover:bg-accent/12 disabled:opacity-50"
+                loading={verify.isPending}
+                variant="secondary"
+                size="sm"
+                className="min-h-10"
               >
                 {verify.isPending ? "Checking…" : "Verify MC"}
-              </button>
+              </Button>
             )}
           </div>
           {carrier && (
@@ -151,17 +166,7 @@ function InboxItem({
                   {carrier.flag_reasons.map((reason) => <li key={reason}>• {reason}</li>)}
                 </ul>
               </div>
-              <span
-                className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase ${
-                  carrier.flag === "green"
-                    ? "bg-ok/15 text-ok-ink"
-                    : carrier.flag === "yellow"
-                      ? "bg-warn/20 text-warn-ink"
-                      : "bg-danger/15 text-danger-ink"
-                }`}
-              >
-                {carrier.flag}
-              </span>
+              <FlagBadge flag={carrier.flag} />
             </div>
           )}
           {verifyError && <p className="mt-2 text-xs text-danger-ink">{verifyError}</p>}
@@ -179,13 +184,13 @@ function InboxItem({
           </div>
           <Link
             to={`/status?load=${item.load_id}`}
-            className="inline-flex min-h-10 items-center gap-1 rounded-lg px-2 text-xs font-bold text-accent-ink hover:bg-accent/12"
+            className={buttonClass("ghost", "sm", "min-h-10 px-2 text-fg-2")}
           >
             View load
           </Link>
         </div>
       )}
-    </article>
+    </Card>
   );
 }
 
@@ -222,15 +227,31 @@ function BolReview({
       eyebrow="BOL intake"
       onClose={onClose}
       size="max-w-3xl"
+      footer={
+        <div className="flex w-full flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            type="submit"
+            form="bol-review-form"
+            variant="primary"
+            disabled={create.isPending || !draft.reference.trim()}
+            loading={create.isPending}
+          >
+            {create.isPending ? "Creating…" : "Create load"}
+          </Button>
+        </div>
+      }
     >
-      <div className="mb-5 rounded-xl bg-accent/12 p-4">
+      <div className="mb-5 rounded-xl border border-line bg-surface-2 p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="text-sm font-bold text-accent-ink tabular-nums">
+          <p className="text-sm font-bold text-fg tabular-nums">
             Extraction confidence: {Math.round(Number(extracted.confidence ?? 0) * 100)}%
           </p>
           {item.has_attachment && (
             <a
-              className="text-xs font-bold text-accent-ink underline underline-offset-2"
+              className={buttonClass("ghost", "sm", "text-fg-2")}
               href={`/api/files/bol/${item.id}`}
               target="_blank"
               rel="noreferrer"
@@ -240,10 +261,11 @@ function BolReview({
           )}
         </div>
         {Boolean(extracted.notes) && (
-          <p className="mt-1 text-xs leading-5 text-accent-ink">{String(extracted.notes)}</p>
+          <p className="mt-1 text-xs leading-5 text-fg-2">{String(extracted.notes)}</p>
         )}
       </div>
       <form
+        id="bol-review-form"
         onSubmit={(event) => {
           event.preventDefault();
           setError("");
@@ -259,22 +281,6 @@ function BolReview({
           />
         </div>
         {error && <p className="mt-4 text-sm text-danger-ink">{error}</p>}
-        <div className="sticky bottom-0 mt-5 flex flex-col-reverse gap-2 border-t border-line/60 bg-surface pt-4 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="min-h-11 rounded-xl border border-line-strong px-4 text-sm font-semibold text-fg-2 hover:bg-surface-2"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={create.isPending || !draft.reference.trim()}
-            className="min-h-11 rounded-xl bg-accent px-5 text-sm font-bold text-on-accent hover:bg-accent-hover disabled:opacity-50"
-          >
-            {create.isPending ? "Creating…" : "Create load"}
-          </button>
-        </div>
       </form>
     </Modal>
   );
@@ -313,24 +319,24 @@ function SimulationMenu() {
   if (!import.meta.env.DEV) return null;
   return (
     <div className="relative">
-      <button
+      <Button
         onClick={() => setOpen((value) => !value)}
-        className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-line-strong bg-surface px-3 text-sm font-semibold text-fg-2 hover:bg-surface-2"
+        variant="secondary"
       >
-        <WandSparkles className="h-4 w-4 text-accent-ink" />
+        <WandSparkles className="h-4 w-4 text-muted" />
         Simulate
-      </button>
+      </Button>
       {open && (
         <div className="absolute right-0 top-12 z-20 w-52 rounded-xl border border-line bg-surface p-1 shadow-xl">
-          <button onClick={() => void simulate("sms")} className="w-full rounded-lg px-3 py-2.5 text-left text-sm hover:bg-surface-2">
+          <Button onClick={() => void simulate("sms")} variant="ghost" full className="justify-start py-2.5 text-left">
             Simulate SMS reply
-          </button>
-          <button onClick={() => void simulate("email")} className="w-full rounded-lg px-3 py-2.5 text-left text-sm hover:bg-surface-2">
+          </Button>
+          <Button onClick={() => void simulate("email")} variant="ghost" full className="justify-start py-2.5 text-left">
             Simulate inbound email
-          </button>
-          <button onClick={() => void simulate("tick")} className="w-full rounded-lg px-3 py-2.5 text-left text-sm hover:bg-surface-2">
+          </Button>
+          <Button onClick={() => void simulate("tick")} variant="ghost" full className="justify-start py-2.5 text-left">
             Run scheduler tick
-          </button>
+          </Button>
         </div>
       )}
     </div>
@@ -383,7 +389,7 @@ export default function Inbox() {
         action={
           <div className="flex items-center gap-2">
             <SimulationMenu />
-            <input
+            <Input
               ref={fileInput}
               type="file"
               accept="application/pdf"
@@ -394,40 +400,41 @@ export default function Inbox() {
                 event.target.value = "";
               }}
             />
-            <button
+            <Button
               onClick={() => fileInput.current?.click()}
               disabled={upload.isPending}
-              className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-accent px-4 text-sm font-bold text-on-accent shadow-sm hover:bg-accent-hover disabled:opacity-60"
+              loading={upload.isPending}
+              variant="primary"
+              icon={Upload}
+              className="shadow-sm"
             >
-              <Upload className="h-4 w-4" />
               {upload.isPending ? "Uploading…" : "Upload BOL"}
-            </button>
+            </Button>
           </div>
         }
       />
       <div className="mb-5 flex gap-2 overflow-x-auto pb-1">
-        {(["All", "BOLs", "Carrier", "Check-in replies", "Other"] as Filter[]).map((item) => (
-          <button
-            key={item}
-            onClick={() => setFilter(item)}
-            className={`min-h-10 shrink-0 rounded-full px-4 text-sm font-semibold ${
-              filter === item
-                ? "bg-accent text-on-accent"
-                : "border border-line bg-surface text-fg-2 hover:bg-surface-2"
-            }`}
-          >
-            {item}
-          </button>
-        ))}
+        <Tabs<Filter>
+          items={(["All", "BOLs", "Carrier", "Check-in replies", "Other"] as Filter[]).map((item) => ({
+            value: item,
+            label: item,
+          }))}
+          value={filter}
+          onChange={setFilter}
+          ariaLabel="Inbox filters"
+        />
         <span className="ml-auto hidden items-center gap-1.5 text-xs text-subtle sm:flex">
           <MoreHorizontal className="h-4 w-4" />
           {items.length} messages
         </span>
       </div>
       {inbox.isError ? (
-        <ErrorState message={(inbox.error as Error).message} />
+        <ErrorState
+          message={(inbox.error as Error).message}
+          onRetry={() => void inbox.refetch()}
+        />
       ) : inbox.isPending ? (
-        <div className="grid min-h-40 place-items-center text-sm text-muted">Loading inbox…</div>
+        <CardListSkeleton />
       ) : items.length === 0 ? (
         <EmptyState
           icon={filter === "All" ? InboxIcon : Mail}
