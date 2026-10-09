@@ -62,7 +62,7 @@ class MockFmcsaProvider:
 
 
 class LiveFmcsaProvider:
-    """QCMobile field names are best-effort mappings and remain unverified against a live key."""
+    """QCMobile provider for docket, carrier, and authority data."""
 
     base_url = "https://mobile.fmcsa.dot.gov/qc/services"
 
@@ -89,9 +89,23 @@ class LiveFmcsaProvider:
         detail = self._get(f"carriers/{dot}")
         carrier = detail.get("carrier", detail)
         authority_result = self._get(f"carriers/{dot}/authority")
-        authority = authority_result.get("authority", authority_result)
-        common = authority.get("commonAuthorityStatus") or authority.get(
-            "contractAuthorityStatus"
+        authority = (
+            authority_result.get("carrierAuthority")
+            or authority_result.get("authority")
+            or authority_result
+        )
+        statuses = [
+            status
+            for status in (
+                authority.get("commonAuthorityStatus"),
+                authority.get("contractAuthorityStatus"),
+            )
+            if status
+        ]
+        authority_status = (
+            "A"
+            if any(str(status).upper() == "A" for status in statuses)
+            else (statuses[0] if statuses else None)
         )
         return CarrierSnapshot(
             mc_number=mc,
@@ -100,7 +114,7 @@ class LiveFmcsaProvider:
             dba_name=carrier.get("dbaName"),
             phone=carrier.get("telephone"),
             allowed_to_operate=carrier.get("allowedToOperate"),
-            authority_status=common,
+            authority_status=authority_status,
             safety_rating=carrier.get("safetyRating"),
             insurance_on_file=bool(carrier.get("bipdInsuranceOnFile"))
             if carrier.get("bipdInsuranceOnFile")
