@@ -69,11 +69,11 @@ export function brokerZoneLabel() {
   );
 }
 
-export function toBrokerInputValue(iso: string) {
+export function toZoneInputValue(iso: string, zone: string) {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return iso.slice(0, 16);
   const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: brokerTimeZone,
+    timeZone: zone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -83,6 +83,49 @@ export function toBrokerInputValue(iso: string) {
   }).formatToParts(date);
   const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
   return `${values.year}-${values.month}-${values.day}T${values.hour}:${values.minute}`;
+}
+
+export function toBrokerInputValue(iso: string) {
+  return toZoneInputValue(iso, brokerTimeZone);
+}
+
+function zoneOffsetAt(date: Date, zone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: zone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map(({ type, value }) => [type, value]));
+  const asUtc = Date.UTC(
+    Number(values.year),
+    Number(values.month) - 1,
+    Number(values.day),
+    Number(values.hour),
+    Number(values.minute),
+    Number(values.second),
+  );
+  return asUtc - date.getTime();
+}
+
+export function zonedInputToDate(value: string, zone: string): Date {
+  const match = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/.exec(value);
+  if (!match) return new Date(Number.NaN);
+  const [, year, month, day, hour, minute] = match;
+  const wallTime = Date.UTC(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour),
+    Number(minute),
+  );
+  const first = wallTime - zoneOffsetAt(new Date(wallTime), zone);
+  const corrected = wallTime - zoneOffsetAt(new Date(first), zone);
+  return new Date(corrected);
 }
 
 export function cityState(city?: string | null, state?: string | null) {

@@ -58,6 +58,12 @@ from app.services.checkins import (
 from app.services.fmcsa import score_carrier
 from app.services.messaging import send_outbound
 from app.services.preferences import get_prefs
+from app.services.stop_timezones import (
+    STATE_TIMEZONES,
+    STOP_ZONES,
+    resolve_stop_timezone,
+    timezone_for_state,
+)
 from app.services.templates import city_state, render_checkin, render_tracking_link
 
 protected = APIRouter(prefix="/api", dependencies=[Depends(require_broker)])
@@ -101,6 +107,14 @@ def update_settings(
     return asdict(get_prefs(db))
 
 
+@protected.get("/meta/stop-timezones")
+def stop_timezones() -> dict:
+    return {
+        "zones": [{"id": zone, "label": label} for zone, label in STOP_ZONES],
+        "states": STATE_TIMEZONES,
+    }
+
+
 def _normalized_mc(value: str) -> str:
     mc = re.sub(r"\D", "", value)
     if not mc or len(mc) > 8:
@@ -118,6 +132,23 @@ def _to_local_aware(value: datetime | None, tz: str) -> datetime | None:
     zone = ZoneInfo(tz)
     interpreted = value.replace(tzinfo=zone) if value.tzinfo is None else value
     return interpreted.astimezone(timezone.utc)
+
+
+def _resolve_stop_datetime(
+    value: datetime | None,
+    explicit_timezone: str | None,
+    state: str | None,
+    broker_timezone: str,
+) -> tuple[datetime | None, str | None]:
+    resolved_timezone = resolve_stop_timezone(explicit_timezone, state, broker_timezone)
+    stored_timezone = (
+        resolved_timezone
+        if value is not None
+        or (explicit_timezone and explicit_timezone.strip())
+        or timezone_for_state(state)
+        else None
+    )
+    return _to_local_aware(value, resolved_timezone), stored_timezone
 
 
 def _apply_status(load: Load, status: str) -> None:
@@ -217,12 +248,16 @@ def create_load(payload: LoadCreate, db: Session = Depends(get_db)) -> Load:
     broker_timezone = get_prefs(db).broker_timezone
     for field in ("driver_phone", "dispatcher_phone"):
         values[field] = _normalized_phone(values[field])
-    values["pickup_datetime"] = _to_local_aware(
-        values["pickup_datetime"], broker_timezone
-    )
-    values["delivery_datetime"] = _to_local_aware(
-        values["delivery_datetime"], broker_timezone
-    )
+    for stop in ("pickup", "delivery"):
+        datetime_key = f"{stop}_datetime"
+        timezone_key = f"{stop}_timezone"
+        state_key = f"{stop}_state"
+        values[datetime_key], values[timezone_key] = _resolve_stop_datetime(
+            values[datetime_key],
+            values[timezone_key],
+            values[state_key],
+            broker_timezone,
+        )
     load = Load(**values)
     db.add(load)
     db.commit()
@@ -234,10 +269,20 @@ def create_load(payload: LoadCreate, db: Session = Depends(get_db)) -> Load:
 def patch_load(load_id: int, payload: LoadPatch, db: Session = Depends(get_db)) -> Load:
     load = _get_load(db, load_id)
     broker_timezone = get_prefs(db).broker_timezone
-    for key, value in payload.model_dump(exclude_unset=True).items():
-        if key.endswith("_datetime"):
-            value = _to_local_aware(value, broker_timezone)
-        elif key in {"driver_phone", "dispatcher_phone"}:
+    values = payload.model_dump(exclude_unset=True)
+    for stop in ("pickup", "delivery"):
+        datetime_key = f"{stop}_datetime"
+        timezone_key = f"{stop}_timezone"
+        state_key = f"{stop}_state"
+        if datetime_key in values:
+            values[datetime_key], values[timezone_key] = _resolve_stop_datetime(
+                values[datetime_key],
+                values.get(timezone_key),
+                values.get(state_key, getattr(load, state_key)),
+                broker_timezone,
+            )
+    for key, value in values.items():
+        if key in {"driver_phone", "dispatcher_phone"}:
             value = _normalized_phone(value)
         setattr(load, key, value)
     load.updated_at = utcnow()
@@ -696,10 +741,12 @@ def create_load_from_inbox(
             "pickup_location",
             "pickup_city",
             "pickup_state",
+            "pickup_timezone",
             "pickup_datetime",
             "delivery_location",
             "delivery_city",
             "delivery_state",
+            "delivery_timezone",
             "delivery_datetime",
             "weight_lbs",
             "equipment_type",
@@ -714,14 +761,19 @@ def create_load_from_inbox(
     }
     fields.update(overrides)
     broker_timezone = get_prefs(db).broker_timezone
-    for key in ("pickup_datetime", "delivery_datetime"):
-        if fields[key]:
-            value = (
-                datetime.fromisoformat(fields[key])
-                if isinstance(fields[key], str)
-                else fields[key]
-            )
-            fields[key] = _to_local_aware(value, broker_timezone)
+    for stop in ("pickup", "delivery"):
+        datetime_key = f"{stop}_datetime"
+        timezone_key = f"{stop}_timezone"
+        state_key = f"{stop}_state"
+        value = fields[datetime_key]
+        if isinstance(value, str):
+            value = datetime.fromisoformat(value)
+        fields[datetime_key], fields[timezone_key] = _resolve_stop_datetime(
+            value,
+            fields[timezone_key],
+            fields[state_key],
+            broker_timezone,
+        )
     load = Load(
         reference=reference,
         status="new",
