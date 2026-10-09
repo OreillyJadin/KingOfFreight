@@ -25,7 +25,7 @@ const buttonVariants: Record<ButtonVariant, string> = {
 };
 
 const buttonSizes: Record<ButtonSize, string> = {
-  sm: "min-h-9 rounded-lg px-3 text-xs",
+  sm: "min-h-11 md:min-h-9 rounded-lg px-3 text-xs",
   md: "min-h-11 rounded-xl px-4 text-sm",
   lg: "min-h-12 rounded-xl px-5 text-sm",
 };
@@ -272,7 +272,7 @@ export function Tabs<T extends string>({
               moveFocus(item.value, -1);
             }
           }}
-          className={`min-h-9 rounded-lg px-3 text-sm font-semibold ${
+          className={`min-h-11 md:min-h-9 rounded-lg px-3 text-sm font-semibold ${
             value === item.value
               ? "bg-surface-3 text-fg"
               : "text-muted hover:text-fg"

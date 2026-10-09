@@ -130,7 +130,7 @@ function AttentionStrip() {
       <div className="flex items-center gap-2 border-b border-warn/30 px-4 py-3">
         <AlertCircle className="h-4 w-4 text-warn-ink" />
         <h2 className="text-sm font-extrabold text-warn-ink">Needs attention</h2>
-        <Badge tone="warn" className="rounded-full px-2 py-0.5 text-[10px] font-bold">
+        <Badge tone="warn" className="rounded-full px-2 py-0.5 text-[11px] font-bold">
           {alerts.data.length}
         </Badge>
       </div>
@@ -146,7 +146,7 @@ function AttentionStrip() {
                   </span>
                   <StatusBadge status={alert.load.status} />
                 </div>
-                <p className="mt-1 line-clamp-2 text-sm text-warn-ink/80 tabular-nums">
+                <p className="mt-1 line-clamp-2 text-sm text-warn-ink tabular-nums">
                   {alert.state === "no_reply"
                     ? `${alert.load.reference} · ${alert.kind} check-in`
                     : alert.reply_raw_text || alert.parsed_summary || "Driver reply needs review."}
@@ -232,7 +232,7 @@ function CheckinTimeline({ checkins, load }: { checkins: CheckIn[]; load: Load }
                 loading={send.isPending}
                 variant="secondary"
                 size="sm"
-                className="min-h-9 px-2.5 text-[11px]"
+                className="px-2.5 text-[11px]"
               >
                 Send check-in now
               </Button>
@@ -285,14 +285,14 @@ function StatusRail({ status }: { status: LoadStatus }) {
             >
               {passed && !isCurrent ? <Check className="h-3 w-3" /> : <span className="h-1.5 w-1.5 rounded-full bg-current" />}
             </span>
-            <span className={`text-center text-[10px] font-semibold leading-tight sm:text-[11px] ${isCurrent ? stepStyle?.ink : "text-muted"}`}>
+            <span className={`text-center text-[11px] font-semibold leading-tight ${isCurrent ? stepStyle?.ink : "text-muted"}`}>
               {statusNames[step]}
             </span>
           </div>
         );
       })}
       {status === "delayed" && (
-        <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-warn/20 px-2.5 py-1 text-[10px] font-bold text-warn-ink">
+        <span className="absolute -top-2 left-1/2 -translate-x-1/2 rounded-full bg-warn/20 px-2.5 py-1 text-[11px] font-bold text-warn-ink">
           Delayed · off route
         </span>
       )}
@@ -576,7 +576,7 @@ function StatusListRow({
           <StatusBadge status={load.status} />
         </div>
         {alert ? (
-          <Badge tone="danger" className="shrink-0">No reply</Badge>
+          <Badge tone="danger" className="shrink-0 !text-fg-2">No reply</Badge>
         ) : pending ? (
           <Badge tone="warn" className="shrink-0">
             {pending.source === "checkin" ? "Driver update" : "Draft to review"}
@@ -664,9 +664,9 @@ function LoadStatusDetail({ load }: { load: Load }) {
               <p className="mt-1 text-sm font-semibold text-fg-2">{data.customer_name || "Customer not set"}</p>
             </div>
             <div className={`shrink-0 rounded-xl px-3 py-2 text-right tabular-nums ${margin < 0 ? "bg-danger/10 text-danger-ink" : "bg-ok/10 text-ok-ink"}`}>
-              <p className="text-[10px] font-bold uppercase tracking-wide">Margin</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide">Margin</p>
               <p className="text-sm font-extrabold tabular-nums">{formatMoney(margin)}</p>
-              <p className="text-[10px] font-semibold tabular-nums">{marginPct.toFixed(1)}%</p>
+              <p className="text-[11px] font-semibold tabular-nums">{marginPct.toFixed(1)}%</p>
             </div>
           </div>
           <div className="mt-4 rounded-xl bg-surface-2 px-3 py-3">
@@ -735,13 +735,13 @@ function LoadStatusDetail({ load }: { load: Load }) {
               <div className="flex items-center gap-2 text-xs text-fg-2">
                 <MapPin className="h-4 w-4 text-muted" />
                 <span className="tabular-nums"><strong className="text-fg">Last location</strong> {elapsed(ping.captured_at)}</span>
-                <span className="rounded bg-surface-3 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-muted">Internal only</span>
+                <span className="rounded bg-surface-3 px-1.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-muted">Internal only</span>
               </div>
               <a
                 href={`https://maps.google.com/?q=${Number(ping.lat)},${Number(ping.lng)}`}
                 target="_blank"
                 rel="noreferrer"
-                className={buttonClass("ghost", "sm", "min-h-9 px-2 text-fg-2")}
+                className={buttonClass("ghost", "sm", "px-2 text-fg-2")}
               >
                 Map <ExternalLink className="h-3 w-3" />
               </a>
@@ -769,7 +769,7 @@ function LoadStatusDetail({ load }: { load: Load }) {
                 {data.communications.length ? (
                   data.communications.map((communication) => (
                     <div key={communication.id} className="border-b border-line/60 px-2 py-2 last:border-0">
-                      <p className="text-[10px] font-bold uppercase text-subtle">{communication.direction} · {communication.tag.replaceAll("_", " ")}</p>
+                      <p className="text-[11px] font-bold uppercase text-subtle">{communication.direction} · {communication.tag.replaceAll("_", " ")}</p>
                       <p className="mt-1 line-clamp-3 text-xs text-fg-2">{communication.content}</p>
                     </div>
                   ))
@@ -870,6 +870,7 @@ export default function Status() {
       ) : (
         <ListDetail
           list={list}
+          detailKey={selectedLoad?.id ?? null}
           detail={
             selectedLoad ? (
               <LoadStatusDetail key={selectedLoad.id} load={selectedLoad} />

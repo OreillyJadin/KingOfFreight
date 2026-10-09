@@ -217,7 +217,7 @@ function BookingModal({
             />
           </label>
         </div>
-        <div className={`flex items-center justify-between rounded-xl px-4 py-3 ${margin < 0 ? "bg-danger/10 text-danger-ink" : "bg-ok/10 text-ok-ink"}`}>
+        <div className={`flex items-center justify-between rounded-xl px-4 py-3 ${margin < 0 ? "bg-danger/10 text-danger-ink" : "bg-ok/10 text-fg-2"}`}>
           <span className="text-sm font-semibold">Estimated margin</span>
           <span className="text-sm font-extrabold tabular-nums">
             {formatMoney(margin)} <span className="ml-1 text-xs font-semibold tabular-nums">({marginPct.toFixed(1)}%)</span>
@@ -565,6 +565,7 @@ export default function TruckStop() {
       ) : (
         <ListDetail
           list={list}
+          detailKey={selectedLoad?.id ?? null}
           detail={
             selectedLoad ? (
               <LoadDetailPanel key={selectedLoad.id} load={selectedLoad} onBook={bookFromDetail} />

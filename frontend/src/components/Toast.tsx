@@ -26,7 +26,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {items.map((item) => (
           <div
             key={item.id}
-            className={`flex items-start gap-3 rounded-xl border border-line border-l-[3px] bg-surface px-4 py-3 shadow-xl ${
+            className={`flex items-start gap-3 rounded-xl border border-line border-l-[3px] bg-surface px-4 py-3 shadow-xl motion-safe:animate-[fw-in_160ms_ease-out] ${
               item.tone === "success" ? "border-l-ok" : "border-l-danger"
             }`}
             role={item.tone === "error" ? "alert" : "status"}
@@ -41,7 +41,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               variant="ghost"
               size="sm"
               icon={X}
-              className="!h-7 !w-7 !min-h-7 !p-0 rounded-lg text-subtle hover:bg-surface-3"
+              className="!h-11 !w-11 !min-h-11 -my-2 -mr-2 !p-0 rounded-lg text-subtle hover:bg-surface-3"
               aria-label="Dismiss notification"
               onClick={() => setItems((current) => current.filter((toast) => toast.id !== item.id))}
             />

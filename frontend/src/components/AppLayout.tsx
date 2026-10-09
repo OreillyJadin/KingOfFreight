@@ -8,7 +8,7 @@ import {
   Truck,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
@@ -25,11 +25,13 @@ const tabs = [
 ];
 
 function AlertsPanel({
+  id,
   alerts,
   pending,
   onClose,
   placement,
 }: {
+  id: string;
   alerts: Alert[];
   pending: StatusUpdate[];
   onClose: () => void;
@@ -37,7 +39,8 @@ function AlertsPanel({
 }) {
   return (
     <Card
-      className={`absolute z-40 overflow-hidden shadow-xl ${
+      id={id}
+      className={`absolute z-40 overflow-hidden shadow-xl motion-safe:animate-[fw-in_160ms_ease-out] ${
         placement === "sidebar"
           ? "bottom-0 left-full ml-2 w-96"
           : "right-0 top-14 w-[min(92vw,390px)]"
@@ -71,7 +74,7 @@ function AlertsPanel({
                   ? `No reply to ${alert.kind} check-in sent ${formatClock(alert.checkin_sent_at)}`
                   : `${alert.parsed_status ?? "Unclear"} reply · ${alert.load.reference}`}
               </p>
-              <p className="mt-1 line-clamp-2 text-xs text-muted">
+              <p className="mt-1 line-clamp-2 text-xs text-fg-2">
                 {alert.reply_raw_text || alert.parsed_summary || `${alert.load.reference} · ${alert.kind} check-in`}
               </p>
             </NavLink>
@@ -86,7 +89,7 @@ function AlertsPanel({
             <p className="text-sm font-semibold text-fg">
               Review {item.status.replace("_", " ")} update
             </p>
-            <p className="mt-1 text-xs text-muted tabular-nums">
+            <p className="mt-1 text-xs text-fg-2 tabular-nums">
               {item.source === "checkin" ? "Driver reply" : "Status draft"} · Load #{item.load_id}
             </p>
           </NavLink>
@@ -106,6 +109,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const location = useLocation();
   const queryClient = useQueryClient();
   const [alertsOpen, setAlertsOpen] = useState(false);
+  const sidebarAlertsId = useId();
+  const headerAlertsId = useId();
+  const alertsTrigger = useRef<HTMLButtonElement | null>(null);
+  const sidebarAlertsButton = useRef<HTMLButtonElement>(null);
+  const headerAlertsButton = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const titles: Record<string, string> = {
       "/inbox": "Inbox · Fifth Wheel",
@@ -115,6 +123,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     };
     document.title = titles[location.pathname] ?? "Fifth Wheel";
   }, [location.pathname]);
+  useEffect(() => {
+    if (!alertsOpen) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      setAlertsOpen(false);
+      alertsTrigger.current?.focus();
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [alertsOpen]);
   const inbox = useQuery({
     queryKey: ["inbox"],
     queryFn: api.inbox,
@@ -153,8 +172,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     await queryClient.clear();
     navigate("/login");
   }
+  function toggleAlerts(trigger: HTMLButtonElement | null) {
+    if (alertsOpen) {
+      setAlertsOpen(false);
+      return;
+    }
+    alertsTrigger.current = trigger;
+    setAlertsOpen(true);
+  }
   return (
     <div className="min-h-screen bg-bg pb-24 text-fg md:pb-0">
+      <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[200] rounded-lg bg-surface px-4 py-2 text-sm font-semibold text-fg shadow-card">Skip to content</a>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-surface md:flex">
         <NavLink to="/inbox" className="flex h-[68px] shrink-0 items-center gap-2.5 px-5">
           <Wordmark className="min-w-0 truncate" markClassName="h-8 w-8 text-accent" />
@@ -178,7 +206,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   <span className="min-w-0 flex-1 truncate">{label}</span>
                   <Badge
                     tone={isActive ? "accent" : "neutral"}
-                    className="rounded-full px-2 py-0.5 text-[11px]"
+                    className="min-h-5 min-w-5 rounded-full px-2 py-0.5 text-[11px]"
                   >
                     <span className="tabular-nums">{countFor(key)}</span>
                   </Badge>
@@ -204,14 +232,16 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <div className="mt-auto border-t border-line p-3">
           <div className="relative mb-1">
             <button
-              onClick={() => setAlertsOpen((open) => !open)}
+              ref={sidebarAlertsButton}
+              onClick={() => toggleAlerts(sidebarAlertsButton.current)}
               className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-fg-2 transition-colors duration-150 hover:bg-surface-2"
-              aria-label={`Alerts, ${totalAttention} open`}
+              aria-expanded={alertsOpen}
+              aria-controls={sidebarAlertsId}
             >
               <span className="relative grid h-8 w-8 shrink-0 place-items-center">
                 <Bell className="h-5 w-5" />
                 {totalAttention > 0 && (
-                  <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-on-danger ring-2 ring-surface">
+                  <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-bold text-on-danger ring-2 ring-surface">
                     <span className="tabular-nums">{totalAttention > 9 ? "9+" : totalAttention}</span>
                   </span>
                 )}
@@ -220,6 +250,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </button>
             {alertsOpen && (
               <AlertsPanel
+                id={sidebarAlertsId}
                 alerts={alertItems}
                 pending={pendingItems}
                 onClose={() => setAlertsOpen(false)}
@@ -251,19 +282,23 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <div className="flex items-center gap-1.5">
             <div className="relative">
               <button
-                onClick={() => setAlertsOpen((open) => !open)}
+                ref={headerAlertsButton}
+                onClick={() => toggleAlerts(headerAlertsButton.current)}
                 className="relative grid h-11 w-11 place-items-center rounded-xl text-muted hover:bg-surface-2 hover:text-fg"
-                aria-label={`Alerts, ${totalAttention} open`}
+                aria-expanded={alertsOpen}
+                aria-controls={headerAlertsId}
               >
                 <Bell className="h-5 w-5" />
+                <span className="sr-only">Alerts</span>
                 {totalAttention > 0 && (
-                  <span className="absolute right-1 top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-on-danger ring-2 ring-surface">
+                  <span className="absolute right-1 top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[11px] font-bold text-on-danger ring-2 ring-surface">
                     <span className="tabular-nums">{totalAttention > 9 ? "9+" : totalAttention}</span>
                   </span>
                 )}
               </button>
               {alertsOpen && (
                 <AlertsPanel
+                  id={headerAlertsId}
                   alerts={alertItems}
                   pending={pendingItems}
                   onClose={() => setAlertsOpen(false)}
@@ -300,10 +335,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 md:pb-10 md:pl-60">
+      <main id="main" tabIndex={-1} className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 md:pb-10 md:pl-60 focus:outline-none">
         {children}
       </main>
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+      <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         <div className="mx-auto grid max-w-xl grid-cols-3 px-2 pt-1.5">
           {tabs.map(({ to, label, icon: Icon, key }) => (
             <NavLink
@@ -318,7 +353,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <span className="relative">
                 <Icon className="h-5 w-5" />
                 {countFor(key) > 0 && (
-                  <span className="absolute -right-2 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[9px] font-bold text-on-accent">
+                  <span className="absolute -right-2 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-[11px] font-bold text-on-accent">
                     <span className="tabular-nums">{countFor(key) > 9 ? "9+" : countFor(key)}</span>
                   </span>
                 )}

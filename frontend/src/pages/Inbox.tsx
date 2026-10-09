@@ -85,7 +85,7 @@ function InboxItem({
             <Badge className="uppercase tracking-wide">
               {tagLabel}
             </Badge>
-            <span className="text-xs text-subtle">
+            <span className="text-xs text-fg-2">
               {formatShortDateTime(item.created_at)}
             </span>
           </div>
@@ -436,7 +436,7 @@ export default function Inbox() {
                 <Badge className="max-w-[70%] truncate uppercase tracking-wide">
                   {item.tag.replaceAll("_", " ")}
                 </Badge>
-                <span className="shrink-0 text-xs text-subtle">
+                <span className="shrink-0 text-xs text-fg-2">
                   {formatShortDateTime(item.created_at)}
                 </span>
               </div>
@@ -518,6 +518,7 @@ export default function Inbox() {
       ) : (
         <ListDetail
           list={list}
+          detailKey={selectedItem?.id ?? null}
           detail={
             selectedItem ? (
               <InboxItem
