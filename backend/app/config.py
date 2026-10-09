@@ -6,6 +6,12 @@ from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+_PLACEHOLDER_SECRETS = {
+    "development-secret-change-me",
+    "replace-with-a-long-random-value",
+}
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=Path(__file__).resolve().parents[2] / ".env",
@@ -69,8 +75,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def require_production_secret(self) -> "Settings":
         if self.env.lower() == "production" and (
-            self.secret_key == "development-secret-change-me"
-            or len(self.secret_key) < 32
+            self.secret_key in _PLACEHOLDER_SECRETS or len(self.secret_key) < 32
         ):
             raise ValueError(
                 "SECRET_KEY must be set to a random value of at least 32 characters in production"

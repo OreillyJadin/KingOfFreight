@@ -204,7 +204,10 @@ def get_load(load_id: int, db: Session = Depends(get_db)) -> dict:
         "status_updates": [_orm_values(item) for item in load.status_updates],
         "checkins": [_orm_values(item) for item in load.checkins],
         "latest_location_ping": _orm_values(latest_ping),
-        "communications": [_orm_values(item) for item in load.communications],
+        "communications": [
+            CommunicationOut.model_validate(item).model_dump()
+            for item in load.communications
+        ],
     }
 
 
