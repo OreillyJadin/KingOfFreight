@@ -106,7 +106,7 @@ function InboxItem({
             )}
           </div>
           <div className="flex gap-2">
-            {item.attachment_path && (
+            {item.has_attachment && (
               <a
                 href={`/api/files/bol/${item.id}`}
                 target="_blank"
@@ -228,7 +228,7 @@ function BolReview({
           <p className="text-sm font-bold text-blue-950">
             Extraction confidence: {Math.round(Number(extracted.confidence ?? 0) * 100)}%
           </p>
-          {item.attachment_path && (
+          {item.has_attachment && (
             <a
               className="text-xs font-bold text-blue-700 underline underline-offset-2"
               href={`/api/files/bol/${item.id}`}

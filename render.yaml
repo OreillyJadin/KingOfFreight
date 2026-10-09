@@ -7,6 +7,7 @@ services:
     dockerContext: .
     healthCheckPath: /health
     numInstances: 1
+    # Legacy: only read by the BOL-to-Postgres migration on first deploy of this version; safe to remove afterwards.
     disk:
       name: bol-uploads
       mountPath: /app/backend/data
@@ -22,6 +23,7 @@ services:
         sync: false
       - key: ENV
         value: production
+      # Legacy: only read by the BOL-to-Postgres migration on first deploy of this version; safe to remove afterwards.
       - key: UPLOAD_DIR
         value: /app/backend/data/uploads
       - key: SCHEDULER_ENABLED

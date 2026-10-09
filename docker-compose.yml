@@ -31,6 +31,7 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
     ports:
       - "8000:8000"
+    # Legacy: only read by the BOL-to-Postgres migration on first deploy of this version; safe to remove afterwards.
     volumes:
       - ./data/uploads:/app/backend/data/uploads
     depends_on:

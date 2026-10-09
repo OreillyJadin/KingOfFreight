@@ -46,8 +46,10 @@ docker compose exec backend python -m scripts.seed
 
 Connect this GitHub repository in Render, choose **New → Blueprint**, select the
 repository, set `BROKER_PASSWORD` when prompted, and deploy. The Blueprint
-creates a paid Render Postgres database, a single always-on web instance, and a
-persistent disk for uploaded BOL PDFs. It builds the frontend into the backend
+creates a paid Render Postgres database and a single always-on web instance. It
+temporarily keeps the legacy uploads disk and `UPLOAD_DIR` setting so the first
+deploy can migrate existing BOL PDFs into Postgres; after that migration
+succeeds, the disk can be removed. It builds the frontend into the backend
 Docker image and runs Alembic migrations at startup.
 
 After deployment, configure the Twilio inbound SMS webhook as
@@ -65,6 +67,47 @@ For a manual Docker deployment, build from the repository root with
 `BROKER_PASSWORD`, and `SECRET_KEY`; the container uses the platform `PORT`
 when provided and serves both the API and built frontend.
 
+### Deploy anywhere
+
+Any container host can build the single-service image from the repository root
+with `docker build -f backend/Dockerfile -t kingoffreight .`. At startup the
+container runs `alembic upgrade head` and listens on `$PORT`. Use exactly one
+instance and one Uvicorn worker because the scheduler runs in-process. The app
+requires PostgreSQL 14 or newer and no other persistent storage; uploaded BOL
+PDFs are stored in PostgreSQL.
+
+Set these required environment variables:
+
+| Variable | Purpose |
+|---|---|
+| `DATABASE_URL` | PostgreSQL connection URL; `postgres://`, `postgresql://`, and `postgresql+psycopg://` are accepted |
+| `BROKER_PASSWORD` | Password for the single broker account |
+| `SECRET_KEY` | Random value of at least 32 characters; generate one with `openssl rand -base64 32` |
+| `ENV` | Set to `production` |
+| `PUBLIC_BASE_URL` | Public HTTPS URL for driver tracking links; defaults to Render's service URL on Render |
+
+Optional live provider settings and their credentials:
+
+| Integration | Settings |
+|---|---|
+| Twilio SMS | `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` |
+| Microsoft Graph email | `EMAIL_PROVIDER=graph`, `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `GRAPH_MAILBOX` |
+| Anthropic LLM | `LLM_PROVIDER=anthropic`, `ANTHROPIC_API_KEY` (optional `ANTHROPIC_MODEL`) |
+| FMCSA carrier verification | `FMCSA_PROVIDER=live`, `FMCSA_WEBKEY` |
+
+For Twilio, set the inbound SMS webhook to
+`https://<render-url>/api/webhooks/twilio/sms`.
+
+To move between database hosts, dump and restore the database:
+
+```sh
+pg_dump -Fc "$OLD_URL" > kof.dump
+pg_restore --no-owner -d "$NEW_URL" kof.dump
+```
+
+The dump includes BOL PDFs. After moving, update the Twilio webhook URL and
+`PUBLIC_BASE_URL`.
+
 The demo broker password is `changeme`; replace it before exposing the service.
 The API is at `http://localhost:8000`, with health check `/health`. OpenAPI docs
 are available at `/docs`. `POST /api/auth/login` accepts `{"password":"..."}`;
@@ -79,18 +122,17 @@ All settings can be supplied in `.env` or as environment variables:
 |---|---|---|
 | `DATABASE_URL` | `postgresql+psycopg://freight:freight@localhost:5432/freight` | SQLAlchemy database URL (SQLite is supported for tests) |
 | `BROKER_PASSWORD` | **required** (`changeme` in `.env.example`) | Single broker login password |
-| `SECRET_KEY` | development placeholder | Signing key for the session cookie |
+| `SECRET_KEY` | development placeholder | Signing key; production requires a random value at least 32 characters long |
 | `BROKER_NAME` | `Freight Broker` | Name in status emails |
 | `BROKER_COMPANY` | `Freight Brokerage` | Company name in messages and tracking |
 | `BROKER_TIMEZONE` | `America/Chicago` | Interpret naive UI/BOL datetimes; format ETA |
-| `PUBLIC_BASE_URL` | `http://localhost:8000` | Public base URL for tracking links and Twilio signatures |
+| `PUBLIC_BASE_URL` | Render service URL or `http://localhost:8000` | Public base URL for tracking links and Twilio signatures |
 | `CORS_ORIGINS` | `http://localhost:5173` | Comma-separated allowed browser origins |
 | `CHECKIN_OFFSET_MINUTES` | `60` | Default appointment-relative driver check-in offset |
 | `NO_REPLY_ALERT_MINUTES` | `30` | Time after a sent check-in before an alert opens |
 | `CHECKIN_DEFAULT_CHANNEL` | `sms` | Default driver check-in channel (`sms` or `email`) |
 | `SCHEDULER_ENABLED` | `true` | Enable in-process check-in and inbox scheduler |
 | `SCHEDULER_INTERVAL_SECONDS` | `60` | Scheduler interval |
-| `UPLOAD_DIR` | `./data/uploads` | BOL PDF storage directory |
 | `ENV` | `development` | Dev simulation endpoints mount only in development |
 | `SMS_PROVIDER` | `mock` | `mock` or `twilio` |
 | `TWILIO_ACCOUNT_SID` | empty | Twilio account SID |

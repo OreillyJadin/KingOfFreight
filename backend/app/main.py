@@ -34,7 +34,6 @@ def _poll_inbox() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    Path(settings.upload_dir).mkdir(parents=True, exist_ok=True)
     if settings.scheduler_enabled:
         scheduler.add_job(
             _run_tick,
