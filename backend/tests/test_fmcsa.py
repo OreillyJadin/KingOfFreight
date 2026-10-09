@@ -3,7 +3,7 @@ from app.schemas import CarrierSnapshot
 from app.services.fmcsa import score_carrier
 
 
-def _live_snapshot(monkeypatch, authority_status):
+def _live_snapshot(monkeypatch, common_status, contract_status="A"):
     payloads = {
         "carriers/docket-number/135797": {
             "carrier": {"dotNumber": 80806, "legalName": "J B HUNT TRANSPORT INC"}
@@ -23,8 +23,8 @@ def _live_snapshot(monkeypatch, authority_status):
         },
         "carriers/80806/authority": {
             "carrierAuthority": {
-                "commonAuthorityStatus": authority_status,
-                "contractAuthorityStatus": "A",
+                "commonAuthorityStatus": common_status,
+                "contractAuthorityStatus": contract_status,
                 "brokerAuthorityStatus": "A",
                 "docketNumber": 135797,
                 "dotNumber": 80806,
@@ -96,9 +96,19 @@ def test_live_provider_parses_qcmobile_authority_payload(monkeypatch):
 
 
 def test_inactive_live_authority_is_scored_red(monkeypatch):
-    snapshot = _live_snapshot(monkeypatch, "I")
+    snapshot = _live_snapshot(monkeypatch, "I", contract_status="I")
 
     assert snapshot is not None
     flag, reasons = score_carrier(snapshot)
     assert flag == "red"
     assert "Operating authority not active" in reasons
+
+
+def test_active_contract_authority_with_inactive_common_is_not_red(monkeypatch):
+    snapshot = _live_snapshot(monkeypatch, "I", contract_status="A")
+
+    assert snapshot is not None
+    assert snapshot.authority_status == "A"
+    flag, reasons = score_carrier(snapshot)
+    assert flag != "red"
+    assert "Operating authority not active" not in reasons
