@@ -14,10 +14,12 @@ export type Load = {
   pickup_location: string | null;
   pickup_city: string | null;
   pickup_state: string | null;
+  pickup_timezone: string | null;
   pickup_datetime: string | null;
   delivery_location: string | null;
   delivery_city: string | null;
   delivery_state: string | null;
+  delivery_timezone: string | null;
   delivery_datetime: string | null;
   weight_lbs: number | string | null;
   equipment_type: string | null;
@@ -171,11 +173,13 @@ export type BolExtraction = {
   pickup_location?: string | null;
   pickup_city?: string | null;
   pickup_state?: string | null;
+  pickup_timezone?: string | null;
   pickup_datetime?: string | null;
   pickup_time_known?: boolean | null;
   delivery_location?: string | null;
   delivery_city?: string | null;
   delivery_state?: string | null;
+  delivery_timezone?: string | null;
   delivery_datetime?: string | null;
   delivery_time_known?: boolean | null;
   weight_lbs?: number | null;
@@ -191,6 +195,11 @@ export type BolExtraction = {
   special_requirements?: string | null;
   confidence?: number;
   notes?: string | null;
+};
+
+export type StopTimezones = {
+  zones: { id: string; label: string }[];
+  states: Record<string, string>;
 };
 
 export type NewLoad = Partial<Load> & Pick<Load, "reference">;

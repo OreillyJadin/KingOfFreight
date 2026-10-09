@@ -8,6 +8,7 @@ import type {
   Load,
   LoadDetail,
   NewLoad,
+  StopTimezones,
   StatusUpdate,
   TrackingSummary,
 } from "./types";
@@ -76,6 +77,7 @@ export const api = {
     request<Load[]>(
       `/loads?tab=${tab}&include_delivered=${includeDelivered ? "true" : "false"}`,
     ),
+  stopTimezones: () => request<StopTimezones>("/meta/stop-timezones"),
   load: (id: number) => request<LoadDetail>(`/loads/${id}`),
   createLoad: (payload: NewLoad) =>
     request<Load>("/loads", json("POST", payload)),

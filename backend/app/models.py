@@ -37,12 +37,14 @@ class Load(Base):
     pickup_location: Mapped[str | None] = mapped_column(Text, nullable=True)
     pickup_city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     pickup_state: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    pickup_timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     pickup_datetime: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     delivery_location: Mapped[str | None] = mapped_column(Text, nullable=True)
     delivery_city: Mapped[str | None] = mapped_column(String(100), nullable=True)
     delivery_state: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    delivery_timezone: Mapped[str | None] = mapped_column(String(64), nullable=True)
     delivery_datetime: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )

@@ -1,4 +1,4 @@
-import { toBrokerInputValue } from "./utils";
+import { getBrokerTimeZone, toZoneInputValue } from "./utils";
 
 export type LoadDraft = Record<string, string>;
 
@@ -54,13 +54,19 @@ export function draftFrom(source: Record<string, unknown> = {}): LoadDraft {
       draft[key] = value === null || value === undefined ? "" : String(value);
     }
   }
-  for (const key of ["pickup_datetime", "delivery_datetime"]) {
-    const value = draft[key];
-    if (!value) continue;
-    if (/[zZ]$|[+-]\d{2}:\d{2}$/.test(value)) {
-      draft[key] = toBrokerInputValue(value);
+  for (const stop of ["pickup", "delivery"]) {
+    const datetimeKey = `${stop}_datetime`;
+    const timezoneKey = `${stop}_timezone`;
+    const value = draft[datetimeKey];
+    const sourceTimezone =
+      typeof source[timezoneKey] === "string" ? String(source[timezoneKey]) : "";
+    if (value && /[zZ]$|[+-]\d{2}:\d{2}$/.test(value)) {
+      const zone = sourceTimezone || getBrokerTimeZone();
+      draft[timezoneKey] = zone;
+      draft[datetimeKey] = toZoneInputValue(value, zone);
     } else {
-      draft[key] = value.slice(0, 16);
+      draft[timezoneKey] = sourceTimezone;
+      if (value) draft[datetimeKey] = value.slice(0, 16);
     }
   }
   return draft;
@@ -75,5 +81,9 @@ export function payloadFromDraft(draft: LoadDraft) {
     }
   }
   payload.reference = draft.reference.trim();
+  for (const stop of ["pickup", "delivery"]) {
+    const key = `${stop}_timezone`;
+    payload[key] = draft[key]?.trim() || null;
+  }
   return payload;
 }

@@ -10,7 +10,32 @@ class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
-class LoadCreate(BaseModel):
+def _validate_stop_timezone(value: Any) -> Any:
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return value
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError) as exc:
+        raise ValueError("Invalid timezone") from exc
+    return value
+
+
+class StopTimezoneFields(BaseModel):
+    pickup_timezone: str | None = None
+    delivery_timezone: str | None = None
+
+    @field_validator("pickup_timezone", "delivery_timezone", mode="before")
+    @classmethod
+    def validate_stop_timezone(cls, value: Any) -> Any:
+        return _validate_stop_timezone(value)
+
+
+class LoadCreate(StopTimezoneFields):
     reference: str
     status: Literal[
         "new", "posted", "booked", "picked_up", "in_transit", "delayed", "delivered"
@@ -43,7 +68,7 @@ class LoadCreate(BaseModel):
     dispatcher_email: str | None = None
 
 
-class LoadPatch(BaseModel):
+class LoadPatch(StopTimezoneFields):
     reference: str | None = None
     status: str | None = None
     pickup_location: str | None = None
@@ -113,11 +138,13 @@ class BolExtraction(BaseModel):
     pickup_location: str | None = None
     pickup_city: str | None = None
     pickup_state: str | None = None
+    pickup_timezone: str | None = None
     pickup_datetime: datetime | None = None
     pickup_time_known: bool | None = None
     delivery_location: str | None = None
     delivery_city: str | None = None
     delivery_state: str | None = None
+    delivery_timezone: str | None = None
     delivery_datetime: datetime | None = None
     delivery_time_known: bool | None = None
     weight_lbs: float | None = None
@@ -133,6 +160,14 @@ class BolExtraction(BaseModel):
     special_requirements: str | None = None
     confidence: float = Field(default=0.3, ge=0, le=1)
     notes: str | None = None
+
+    @field_validator("pickup_timezone", "delivery_timezone", mode="before")
+    @classmethod
+    def ignore_invalid_stop_timezone(cls, value: Any) -> str | None:
+        try:
+            return _validate_stop_timezone(value)
+        except ValueError:
+            return None
 
 
 class ReplyParse(BaseModel):
@@ -229,10 +264,12 @@ class LoadOut(ORMModel):
     pickup_location: str | None
     pickup_city: str | None
     pickup_state: str | None
+    pickup_timezone: str | None
     pickup_datetime: datetime | None
     delivery_location: str | None
     delivery_city: str | None
     delivery_state: str | None
+    delivery_timezone: str | None
     delivery_datetime: datetime | None
     weight_lbs: Decimal | None
     equipment_type: str | None
