@@ -151,6 +151,15 @@ def test_bol_upload_and_create_load(client, db):
     assert db.get(Load, created.json()["id"]).bol_source == communication["id"]
     linked = db.get(Communication, communication["id"])
     assert linked.archived and linked.load_id == created.json()["id"]
+    load_detail = client.get(f"/api/loads/{created.json()['id']}")
+    assert load_detail.status_code == 200, load_detail.text
+    attached_communication = next(
+        item
+        for item in load_detail.json()["communications"]
+        if item["id"] == communication["id"]
+    )
+    assert attached_communication["has_attachment"] is True
+    assert attached_communication["attachment_filename"] == "Böl of lading 2026.pdf"
 
 
 def test_bol_file_endpoint_returns_404_without_a_file(client, db):

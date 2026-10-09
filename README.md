@@ -48,9 +48,12 @@ Connect this GitHub repository in Render, choose **New → Blueprint**, select t
 repository, set `BROKER_PASSWORD` when prompted, and deploy. The Blueprint
 creates a paid Render Postgres database and a single always-on web instance. It
 temporarily keeps the legacy uploads disk and `UPLOAD_DIR` setting so the first
-deploy can migrate existing BOL PDFs into Postgres; after that migration
-succeeds, the disk can be removed. It builds the frontend into the backend
-Docker image and runs Alembic migrations at startup.
+deploy can migrate existing BOL PDFs into Postgres. The first deploy fails and
+Render keeps the previous version running (if any) when a stored PDF cannot be
+found; mount the old uploads disk and set `UPLOAD_DIR`, or set
+`BOL_BACKFILL_ALLOW_MISSING=true` to proceed without missing PDFs. After the
+migration succeeds, the disk can be removed. It builds the frontend into the
+backend Docker image and runs Alembic migrations at startup.
 
 After deployment, configure the Twilio inbound SMS webhook as
 `https://<render-url>/api/webhooks/twilio/sms`. To enable live integrations,

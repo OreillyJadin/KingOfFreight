@@ -71,7 +71,8 @@ def upgrade() -> None:
         sa.select(communications.c.id, communications.c.attachment_path).where(
             communications.c.attachment_path.is_not(None)
         )
-    )
+    ).fetchall()
+    missing_files: list[tuple[int, str]] = []
     for communication_id, stored_path in rows:
         source = Path(stored_path)
         if not source.is_file():
@@ -81,6 +82,7 @@ def upgrade() -> None:
                 f"WARNING: BOL file for communication {communication_id} was not found at "
                 f"{stored_path!r} or {source}; leaving it unattached."
             )
+            missing_files.append((communication_id, stored_path))
             continue
 
         content = source.read_bytes()
@@ -102,6 +104,19 @@ def upgrade() -> None:
                 attachment_file_id=file_id,
                 attachment_filename=_display_filename(stored_path),
             )
+        )
+
+    allow_missing = os.environ.get("BOL_BACKFILL_ALLOW_MISSING", "").strip().lower()
+    if missing_files and allow_missing not in {"1", "true", "yes"}:
+        details = "\n".join(
+            f"- communication {communication_id}: {stored_path}"
+            for communication_id, stored_path in missing_files
+        )
+        raise RuntimeError(
+            "BOL backfill cannot continue because these files are missing:\n"
+            f"{details}\n"
+            "Mount the old uploads directory and set UPLOAD_DIR, or set "
+            "BOL_BACKFILL_ALLOW_MISSING=true to proceed without them."
         )
 
     with op.batch_alter_table("communications") as batch:

@@ -56,6 +56,13 @@ def test_production_requires_a_long_non_default_secret():
             env="production",
             secret_key="x" * 20,
         )
+    with pytest.raises(ValidationError):
+        Settings(
+            _env_file=None,
+            broker_password="x",
+            env="production",
+            secret_key="replace-with-a-long-random-value",
+        )
 
     settings = Settings(
         _env_file=None,
