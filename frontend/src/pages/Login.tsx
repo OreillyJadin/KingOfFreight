@@ -48,7 +48,7 @@ export default function Login() {
             One clear view of your inbox, active loads, driver check-ins, and customer updates.
           </p>
         </div>
-        <p className="relative text-xs text-hero-fg/50">A quieter way to run the day.</p>
+        <p className="relative text-xs text-hero-fg/70">A quieter way to run the day.</p>
       </section>
       <section className="flex min-h-screen items-center justify-center bg-bg px-5 py-10 md:bg-surface">
         <div className="w-full max-w-[410px]">

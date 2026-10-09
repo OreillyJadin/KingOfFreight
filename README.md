@@ -30,6 +30,8 @@ npm run dev
 Open `http://localhost:5173`. Vite proxies `/api` to the backend on port 8000 so
 the signed session cookie remains same-origin.
 
+See [DESIGN.md](DESIGN.md) for frontend brand, theme, layout, and accessibility conventions.
+
 Run the app as a single Uvicorn worker and a single instance. The in-process
 scheduler would otherwise run duplicate check-in jobs and double-send messages.
 

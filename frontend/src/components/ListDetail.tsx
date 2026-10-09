@@ -6,11 +6,13 @@ import { Card, Skeleton } from "./ui";
 export function ListDetail({
   list,
   detail,
+  detailKey,
   detailTitle,
   onCloseDetail,
 }: {
   list: ReactNode;
   detail: ReactNode | null;
+  detailKey: string | number | null;
   detailTitle: string;
   onCloseDetail: () => void;
 }) {
@@ -23,7 +25,7 @@ export function ListDetail({
           {list}
         </div>
         <div className="sticky top-6 max-h-[calc(100dvh-3rem)] overflow-y-auto">
-          <Card className="p-5">{detail}</Card>
+          <Card key={detailKey} className="p-5 motion-safe:animate-[fw-in_160ms_ease-out]">{detail}</Card>
         </div>
       </div>
     ) : (

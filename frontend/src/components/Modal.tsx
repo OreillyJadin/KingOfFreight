@@ -92,7 +92,7 @@ export default function Modal({
         <header className="sticky top-0 z-10 flex items-start justify-between border-b border-line/60 bg-surface px-5 py-4 sm:px-6">
           <div>
             {eyebrow && (
-              <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.15em] text-muted">
+              <p className="mb-1 text-[11px] font-bold uppercase tracking-[0.15em] text-fg-2">
                 {eyebrow}
               </p>
             )}
