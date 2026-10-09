@@ -28,13 +28,21 @@ function AlertsPanel({
   alerts,
   pending,
   onClose,
+  placement,
 }: {
   alerts: Alert[];
   pending: StatusUpdate[];
   onClose: () => void;
+  placement: "header" | "sidebar";
 }) {
   return (
-    <Card className="absolute right-0 top-14 z-40 w-[min(92vw,390px)] overflow-hidden shadow-xl">
+    <Card
+      className={`absolute z-40 overflow-hidden shadow-xl ${
+        placement === "sidebar"
+          ? "bottom-0 left-full ml-2 w-96"
+          : "right-0 top-14 w-[min(92vw,390px)]"
+      }`}
+    >
       <div className="flex items-center justify-between border-b border-line/60 px-4 py-3">
         <div>
           <p className="font-bold text-fg">Needs attention</p>
@@ -147,40 +155,100 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   }
   return (
     <div className="min-h-screen bg-bg pb-24 text-fg md:pb-0">
-      <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur">
+      <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-surface md:flex">
+        <NavLink to="/inbox" className="flex h-[68px] shrink-0 items-center gap-2.5 px-5">
+          <Wordmark className="min-w-0 truncate" markClassName="h-8 w-8 text-accent" />
+        </NavLink>
+        <nav aria-label="Main" className="space-y-1 px-3 pt-3">
+          {tabs.map(({ to, label, icon: Icon, key }) => (
+            <NavLink
+              key={to}
+              to={to}
+              className={({ isActive }) =>
+                `flex min-h-11 items-center gap-3 rounded-r-xl border-l-2 px-3 text-sm font-semibold transition-colors duration-150 ${
+                  isActive
+                    ? "border-accent bg-surface-3 text-fg"
+                    : "border-transparent text-fg-2 hover:bg-surface-2"
+                }`
+              }
+            >
+              {({ isActive }) => (
+                <>
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{label}</span>
+                  <Badge
+                    tone={isActive ? "accent" : "neutral"}
+                    className="rounded-full px-2 py-0.5 text-[11px]"
+                  >
+                    <span className="tabular-nums">{countFor(key)}</span>
+                  </Badge>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+        <div className="mx-4 my-4 border-t border-line" />
+        <NavLink
+          to="/settings"
+          className={({ isActive }) =>
+            `mx-3 flex min-h-11 items-center gap-3 rounded-r-xl border-l-2 px-3 text-sm font-semibold transition-colors duration-150 ${
+              isActive
+                ? "border-accent bg-surface-3 text-fg"
+                : "border-transparent text-fg-2 hover:bg-surface-2"
+            }`
+          }
+        >
+          <Settings className="h-4 w-4 shrink-0" />
+          Settings
+        </NavLink>
+        <div className="mt-auto border-t border-line p-3">
+          <div className="relative mb-1">
+            <button
+              onClick={() => setAlertsOpen((open) => !open)}
+              className="flex min-h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-fg-2 transition-colors duration-150 hover:bg-surface-2"
+              aria-label={`Alerts, ${totalAttention} open`}
+            >
+              <span className="relative grid h-8 w-8 shrink-0 place-items-center">
+                <Bell className="h-5 w-5" />
+                {totalAttention > 0 && (
+                  <span className="absolute -right-1 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-on-danger ring-2 ring-surface">
+                    <span className="tabular-nums">{totalAttention > 9 ? "9+" : totalAttention}</span>
+                  </span>
+                )}
+              </span>
+              Alerts
+            </button>
+            {alertsOpen && (
+              <AlertsPanel
+                alerts={alertItems}
+                pending={pendingItems}
+                onClose={() => setAlertsOpen(false)}
+                placement="sidebar"
+              />
+            )}
+          </div>
+          <div className="flex items-center gap-1">
+            <ThemeToggle className="flex-1 justify-start" />
+            <Button
+              onClick={() => void logout()}
+              variant="ghost"
+              size="sm"
+              icon={LogOut}
+              className="min-h-11 px-3 text-muted hover:bg-surface-2 hover:text-fg"
+              aria-label="Log out"
+              title="Log out"
+            >
+              <span>Log out</span>
+            </Button>
+          </div>
+        </div>
+      </aside>
+      <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur md:hidden">
         <div className="mx-auto flex h-[68px] max-w-6xl items-center justify-between px-4 sm:px-6">
           <NavLink to="/inbox" className="flex min-w-0 items-center gap-2.5">
             <Wordmark className="min-w-0 truncate" markClassName="h-8 w-8 text-accent" />
           </NavLink>
-          <nav className="hidden h-full items-center gap-1 md:flex">
-            {tabs.map(({ to, label, key }) => (
-              <NavLink
-                key={to}
-                to={to}
-                className={({ isActive }) =>
-                  `flex h-10 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition ${
-                    isActive
-                      ? "bg-accent/12 text-fg ring-1 ring-inset ring-accent/30"
-                      : "text-muted hover:bg-surface-2 hover:text-fg"
-                  }`
-                }
-              >
-                {({ isActive }) => (
-                  <>
-                    {label}
-                    <Badge
-                      tone={isActive ? "accent" : "neutral"}
-                      className="rounded-full px-2 py-0.5 text-[11px]"
-                    >
-                      <span className="tabular-nums">{countFor(key)}</span>
-                    </Badge>
-                  </>
-                )}
-              </NavLink>
-            ))}
-          </nav>
           <div className="flex items-center gap-1.5">
-            <ThemeToggle />
             <div className="relative">
               <button
                 onClick={() => setAlertsOpen((open) => !open)}
@@ -199,9 +267,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   alerts={alertItems}
                   pending={pendingItems}
                   onClose={() => setAlertsOpen(false)}
+                  placement="header"
                 />
               )}
             </div>
+            <ThemeToggle />
             <NavLink
               to="/settings"
               className={({ isActive }) =>
@@ -230,7 +300,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-6xl px-4 pb-10 pt-6 sm:px-6 sm:pt-8">
+      <main className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 md:pb-10 md:pl-60">
         {children}
       </main>
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">

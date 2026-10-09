@@ -7,17 +7,19 @@ import {
   Plus,
   Truck,
 } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState, type FormEvent } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useToast } from "../useToast";
 import LoadFields from "../components/LoadFields";
+import { ListDetail, ListRow, ListRowSkeleton } from "../components/ListDetail";
 import Modal from "../components/Modal";
 import { EmptyState, ErrorState, FlagBadge, Lane, PageHeading, StatusBadge } from "../components/common";
-import { Button, Card, CardListSkeleton, Input, Select } from "../components/ui";
+import { Button, Card, Input, Select } from "../components/ui";
 import { cityState, formatDateTime, formatMoney } from "../utils";
 import { draftFrom, payloadFromDraft, type LoadDraft } from "../load-form";
 import type { BookPayload, Carrier, Load, NewLoad } from "../types";
+import { useMediaQuery } from "../useMediaQuery";
 
 function BookingModal({
   load,
@@ -340,7 +342,43 @@ function NewLoadModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-function LoadCard({
+function TruckStopListRow({
+  load,
+  selected,
+  onSelect,
+}: {
+  load: Load;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <ListRow selected={selected} onSelect={onSelect}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate font-bold text-fg tabular-nums">{load.reference}</span>
+        <StatusBadge status={load.status} />
+      </div>
+      <div className="mt-1">
+        <Lane
+          from={cityState(load.pickup_city, load.pickup_state)}
+          to={cityState(load.delivery_city, load.delivery_state)}
+          compact
+        />
+      </div>
+      <div className="mt-1 flex min-w-0 items-center gap-1 text-xs text-fg-2">
+        <span className="shrink-0">Pickup {formatDateTime(load.pickup_datetime)}</span>
+        <span aria-hidden="true">·</span>
+        <span className="truncate">{load.equipment_type || "Equipment TBD"}</span>
+      </div>
+      {load.customer_rate !== null && load.customer_rate !== undefined && load.customer_rate !== "" && (
+        <p className="mt-1 text-xs text-muted">
+          Customer rate <span className="font-semibold text-fg-2 tabular-nums">{formatMoney(load.customer_rate)}</span>
+        </p>
+      )}
+    </ListRow>
+  );
+}
+
+function LoadDetailPanel({
   load,
   onBook,
 }: {
@@ -367,7 +405,7 @@ function LoadCard({
     }
   }
   return (
-    <Card as="article" className="p-4 sm:p-5">
+    <div>
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-subtle">Load</p>
@@ -395,7 +433,17 @@ function LoadCard({
         <div><span className="text-subtle">Equipment</span><p className="mt-1 font-semibold text-fg-2">{load.equipment_type || "TBD"}</p></div>
         <div><span className="text-subtle">Weight</span><p className="mt-1 font-semibold text-fg-2">{load.weight_lbs ? `${Number(load.weight_lbs).toLocaleString()} lb` : "TBD"}</p></div>
         <div className="col-span-2"><span className="text-subtle">Customer</span><p className="mt-1 font-semibold text-fg-2">{load.customer_name || "Not assigned"}</p></div>
+        {load.customer_rate !== null && load.customer_rate !== undefined && load.customer_rate !== "" && (
+          <div><span className="text-subtle">Customer rate</span><p className="mt-1 font-semibold text-fg-2 tabular-nums">{formatMoney(load.customer_rate)}</p></div>
+        )}
       </div>
+      {(load.commodity || load.special_requirements || load.notes) && (
+        <div className="mt-4 space-y-3 border-t border-line/60 pt-3 text-sm">
+          {load.commodity && <p><span className="text-subtle">Commodity</span><br /><span className="font-medium text-fg-2">{load.commodity}</span></p>}
+          {load.special_requirements && <p><span className="text-subtle">Special requirements</span><br /><span className="font-medium text-fg-2">{load.special_requirements}</span></p>}
+          {load.notes && <p><span className="text-subtle">Notes</span><br /><span className="font-medium text-fg-2">{load.notes}</span></p>}
+        </div>
+      )}
       <div className="mt-5 flex flex-col gap-2 border-t border-line/60 pt-4 sm:flex-row">
         <Button
           onClick={() => void copyPost()}
@@ -424,11 +472,13 @@ function LoadCard({
           Book carrier
         </Button>
       </div>
-    </Card>
+    </div>
   );
 }
 
 export default function TruckStop() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wide = useMediaQuery("(min-width: 1280px)");
   const loads = useQuery({
     queryKey: ["loads", "truckstop", false],
     queryFn: () => api.loads("truckstop"),
@@ -436,6 +486,49 @@ export default function TruckStop() {
   });
   const [booking, setBooking] = useState<Load | null>(null);
   const [newLoad, setNewLoad] = useState(false);
+  const selectedId = searchParams.get("load");
+  const selectedLoad = loads.data?.find((load) => String(load.id) === selectedId);
+  useEffect(() => {
+    if (!wide || !loads.data?.length || selectedLoad) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("load", String(loads.data[0].id));
+    setSearchParams(next, { replace: true });
+  }, [wide, loads.data, selectedLoad, searchParams, setSearchParams]);
+  function selectLoad(id: number) {
+    const next = new URLSearchParams(searchParams);
+    next.set("load", String(id));
+    setSearchParams(next);
+  }
+  function closeDetail() {
+    const next = new URLSearchParams(searchParams);
+    next.delete("load");
+    setSearchParams(next);
+  }
+  function bookFromDetail(load: Load) {
+    if (!wide) {
+      const next = new URLSearchParams(searchParams);
+      next.delete("load");
+      setSearchParams(next);
+    }
+    setBooking(load);
+  }
+  const list = loads.isPending ? (
+    <ListRowSkeleton />
+  ) : (
+    <Card className="p-2">
+      <ul role="list" aria-label="Open loads" className="space-y-1">
+        {loads.data?.map((load) => (
+          <li key={load.id}>
+            <TruckStopListRow
+              load={load}
+              selected={selectedLoad?.id === load.id}
+              onSelect={() => selectLoad(load.id)}
+            />
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
   return (
     <div>
       <PageHeading
@@ -458,14 +551,28 @@ export default function TruckStop() {
           message={(loads.error as Error).message}
           onRetry={() => void loads.refetch()}
         />
-      ) : loads.isPending ? (
-        <CardListSkeleton />
-      ) : loads.data.length === 0 ? (
-        <EmptyState icon={Truck} title="No open loads" description="Create a load or review a BOL to add freight to TruckStop." />
+      ) : !loads.isPending && loads.data.length === 0 ? (
+        <EmptyState
+          icon={Truck}
+          title="No open loads"
+          description="Create a load or review a BOL to add freight to TruckStop."
+          action={
+            <Button onClick={() => setNewLoad(true)} variant="primary" icon={Plus}>
+              New load
+            </Button>
+          }
+        />
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {loads.data.map((load) => <LoadCard key={load.id} load={load} onBook={setBooking} />)}
-        </div>
+        <ListDetail
+          list={list}
+          detail={
+            selectedLoad ? (
+              <LoadDetailPanel key={selectedLoad.id} load={selectedLoad} onBook={bookFromDetail} />
+            ) : null
+          }
+          detailTitle={selectedLoad?.reference ?? "Load details"}
+          onCloseDetail={closeDetail}
+        />
       )}
       {booking && <BookingModal load={booking} onClose={() => setBooking(null)} />}
       {newLoad && <NewLoadModal onClose={() => setNewLoad(false)} />}
