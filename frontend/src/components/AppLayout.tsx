@@ -14,6 +14,7 @@ import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import type { Alert, StatusUpdate } from "../types";
 import { formatClock } from "../utils";
+import { Badge, Button, Card } from "./ui";
 import { Wordmark } from "./Brand";
 import ThemeToggle from "./ThemeToggle";
 
@@ -33,7 +34,7 @@ function AlertsPanel({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute right-0 top-14 z-40 w-[min(92vw,390px)] overflow-hidden rounded-2xl border border-line bg-surface shadow-xl">
+    <Card className="absolute right-0 top-14 z-40 w-[min(92vw,390px)] overflow-hidden shadow-xl">
       <div className="flex items-center justify-between border-b border-line/60 px-4 py-3">
         <div>
           <p className="font-bold text-fg">Needs attention</p>
@@ -88,7 +89,7 @@ function AlertsPanel({
           </p>
         )}
       </div>
-    </div>
+    </Card>
   );
 }
 
@@ -167,13 +168,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 {({ isActive }) => (
                   <>
                     {label}
-                    <span
-                      className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-                        isActive ? "bg-accent text-on-accent" : "bg-surface-3 text-muted"
-                      }`}
+                    <Badge
+                      tone={isActive ? "accent" : "neutral"}
+                      className="rounded-full px-2 py-0.5 text-[11px]"
                     >
                       <span className="tabular-nums">{countFor(key)}</span>
-                    </span>
+                    </Badge>
                   </>
                 )}
               </NavLink>
@@ -216,15 +216,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             >
               <Settings className="h-5 w-5" />
             </NavLink>
-            <button
+            <Button
               onClick={() => void logout()}
-              className="flex h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-muted hover:bg-surface-2 hover:text-fg"
+              variant="ghost"
+              size="sm"
+              icon={LogOut}
+              className="h-11 px-3 text-muted hover:bg-surface-2 hover:text-fg"
               aria-label="Log out"
               title="Log out"
             >
-              <LogOut className="h-4 w-4" />
               <span className="hidden sm:inline">Log out</span>
-            </button>
+            </Button>
           </div>
         </div>
       </header>

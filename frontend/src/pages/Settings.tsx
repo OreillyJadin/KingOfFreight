@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState, type FormEvent } from "react";
 import { PageHeading } from "../components/common";
+import { Button, Card, Input, Select, Skeleton, Tabs } from "../components/ui";
 import { api } from "../api";
 import type { BrokerPrefs, BrokerPrefsUpdate } from "../types";
 import { setBrokerTimeZone } from "../utils";
@@ -69,7 +70,14 @@ export default function Settings() {
     ? timezones
     : ([["Current timezone", form?.broker_timezone ?? "America/Chicago"], ...timezones] as const);
   if (query.isPending || !form) {
-    return <div className="py-16 text-center text-sm text-muted">Loading settings…</div>;
+    return (
+      <Card className="space-y-5 p-5 sm:p-6">
+        <Skeleton className="h-6 w-40" />
+        <Skeleton className="h-11 w-full" />
+        <Skeleton className="h-11 w-full" />
+        <Skeleton className="h-11 w-2/3" />
+      </Card>
+    );
   }
   return (
     <div>
@@ -79,7 +87,7 @@ export default function Settings() {
         description="Manage your broker details and driver check-in defaults."
       />
       <form onSubmit={submit} className="space-y-5">
-        <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
+        <Card as="section" className="p-5 sm:p-6">
           <h2 className="text-lg font-bold text-fg">Check-ins</h2>
           <div className="mt-5 grid gap-5 sm:grid-cols-2">
             <label className="block">
@@ -87,13 +95,13 @@ export default function Settings() {
                 Send driver check-in
               </span>
               <div className="flex items-center gap-2">
-                <input
+                <Input
                   type="number"
                   min={0}
                   max={720}
                   value={form.checkin_offset_minutes}
                   onChange={(event) => change("checkin_offset_minutes", Number(event.target.value))}
-                  className="h-11 w-28 rounded-xl border border-line-strong px-3 text-sm"
+                  className="h-11 w-28"
                   required
                 />
                 <span className="text-sm text-fg-2">minutes after the pickup/delivery appointment</span>
@@ -107,13 +115,13 @@ export default function Settings() {
                 Alert me if no reply within
               </span>
               <div className="flex items-center gap-2">
-                <input
+                <Input
                   type="number"
                   min={5}
                   max={240}
                   value={form.no_reply_alert_minutes}
                   onChange={(event) => change("no_reply_alert_minutes", Number(event.target.value))}
-                  className="h-11 w-28 rounded-xl border border-line-strong px-3 text-sm"
+                  className="h-11 w-28"
                   required
                 />
                 <span className="text-sm text-fg-2">minutes</span>
@@ -124,30 +132,22 @@ export default function Settings() {
             </label>
             <fieldset>
               <legend className="mb-2 text-sm font-semibold text-fg-2">Default check-in method</legend>
-              <div className="inline-flex rounded-xl bg-surface-3 p-1">
-                {(["sms", "email"] as const).map((channel) => (
-                  <button
-                    key={channel}
-                    type="button"
-                    aria-pressed={form.checkin_default_channel === channel}
-                    onClick={() => change("checkin_default_channel", channel)}
-                    className={`min-h-10 rounded-lg px-4 text-sm font-semibold capitalize ${
-                      form.checkin_default_channel === channel
-                        ? "bg-surface text-accent-ink shadow-sm"
-                        : "text-fg-2"
-                    }`}
-                  >
-                    {channel === "sms" ? "SMS" : "Email"}
-                  </button>
-                ))}
-              </div>
+              <Tabs
+                items={(["sms", "email"] as const).map((channel) => ({
+                  value: channel,
+                  label: channel === "sms" ? "SMS" : "Email",
+                }))}
+                value={form.checkin_default_channel}
+                onChange={(channel) => change("checkin_default_channel", channel)}
+                ariaLabel="Default check-in method"
+              />
               <p className="mt-2 text-xs text-muted">
                 Applies to loads booked after you save.
               </p>
             </fieldset>
           </div>
-        </section>
-        <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
+        </Card>
+        <Card as="section" className="p-5 sm:p-6">
           <h2 className="text-lg font-bold text-fg">Your details</h2>
           <p className="mt-1 text-sm text-muted">Shown in customer emails and driver texts.</p>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
@@ -157,44 +157,45 @@ export default function Settings() {
             ] as const).map(([key, label]) => (
               <label key={key}>
                 <span className="mb-1.5 block text-sm font-semibold text-fg-2">{label}</span>
-                <input
+                <Input
                   value={form[key]}
                   onChange={(event) => change(key, event.target.value)}
                   maxLength={100}
                   minLength={1}
                   required
-                  className="h-11 w-full rounded-xl border border-line-strong px-3 text-sm"
+                  className="h-11"
                 />
               </label>
             ))}
           </div>
-        </section>
-        <section className="rounded-2xl border border-line bg-surface p-5 shadow-card sm:p-6">
+        </Card>
+        <Card as="section" className="p-5 sm:p-6">
           <h2 className="text-lg font-bold text-fg">Timezone</h2>
           <label className="mt-4 block max-w-md">
             <span className="mb-1.5 block text-sm font-semibold text-fg-2">Broker timezone</span>
-            <select
+            <Select
               value={form.broker_timezone}
               onChange={(event) => change("broker_timezone", event.target.value)}
-              className="h-11 w-full rounded-xl border border-line-strong bg-surface px-3 text-sm"
+              className="h-11"
             >
               {zoneOptions.map(([label, zone]) => (
                 <option key={zone} value={zone}>{label} ({zone})</option>
               ))}
-            </select>
+            </Select>
           </label>
           <p className="mt-2 text-xs text-muted">
             Changes affect display and new date/time inputs; stored dates remain unchanged.
           </p>
-        </section>
+        </Card>
         {error && <p role="alert" className="rounded-xl bg-danger/10 p-3 text-sm text-danger-ink">{error}</p>}
-        <button
+        <Button
           type="submit"
           disabled={!dirty || save.isPending}
-          className="min-h-11 rounded-xl bg-accent px-5 text-sm font-bold text-on-accent hover:bg-accent-hover disabled:cursor-not-allowed disabled:opacity-50"
+          loading={save.isPending}
+          variant="primary"
         >
           {save.isPending ? "Saving…" : "Save settings"}
-        </button>
+        </Button>
       </form>
     </div>
   );

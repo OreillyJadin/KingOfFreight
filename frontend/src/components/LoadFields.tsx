@@ -8,6 +8,7 @@ import {
   getBrokerTimeZone,
   zonedInputToDate,
 } from "../utils";
+import { Input, Select } from "./ui";
 
 export default function LoadFields({
   value,
@@ -76,24 +77,24 @@ export default function LoadFields({
                     <span className="mb-1.5 block text-xs font-semibold text-fg-2">
                       {stop ? datetimeLabel : label}
                     </span>
-                    <input
+                    <Input
                       type={type}
                       step={type === "number" ? "any" : undefined}
                       value={value[key] ?? ""}
                       onChange={(event: ChangeEvent<HTMLInputElement>) =>
                         onChange(key, event.target.value)
                       }
-                      className="h-10 w-full rounded-lg border border-line-strong bg-surface px-3 text-sm text-fg tabular-nums outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/25"
+                      className="tabular-nums"
                     />
                     {stop && (
                       <div className="mt-1.5">
-                        <select
+                        <Select
                           aria-label={`${stop} facility timezone`}
                           value={value[timezoneKey!] ?? ""}
                           onChange={(event) =>
                             onChange(timezoneKey!, event.target.value)
                           }
-                          className="h-9 w-full rounded-lg border border-line-strong bg-surface px-3 text-sm text-fg-2 outline-none focus:border-accent focus:ring-2 focus:ring-accent/25"
+                          className="h-9 text-fg-2"
                         >
                           <option value="">{autoLabel}</option>
                           {metadata?.zones.map((zone) => (
@@ -109,7 +110,7 @@ export default function LoadFields({
                                 {value[timezoneKey!]}
                               </option>
                             )}
-                        </select>
+                        </Select>
                         {preview && (
                           <p className="mt-1 text-xs text-muted tabular-nums">= {preview}</p>
                         )}
