@@ -189,9 +189,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               >
                 <Bell className="h-5 w-5" />
                 {totalAttention > 0 && (
-                  <Badge tone="danger" className="absolute right-1 top-1 min-h-5 min-w-5 px-1 text-[10px] ring-2 ring-surface">
+                  <span className="absolute right-1 top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-danger px-1 text-[10px] font-bold text-on-danger ring-2 ring-surface">
                     <span className="tabular-nums">{totalAttention > 9 ? "9+" : totalAttention}</span>
-                  </Badge>
+                  </span>
                 )}
               </button>
               {alertsOpen && (
@@ -248,9 +248,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <span className="relative">
                 <Icon className="h-5 w-5" />
                 {countFor(key) > 0 && (
-                  <Badge tone="accent" className="absolute -right-2 -top-1 min-h-4 min-w-4 px-1 text-[9px]">
+                  <span className="absolute -right-2 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[9px] font-bold text-on-accent">
                     <span className="tabular-nums">{countFor(key) > 9 ? "9+" : countFor(key)}</span>
-                  </Badge>
+                  </span>
                 )}
               </span>
               {label}
