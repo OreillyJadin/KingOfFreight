@@ -62,7 +62,7 @@ class MockFmcsaProvider:
 
 
 class LiveFmcsaProvider:
-    """QCMobile field names are best-effort mappings and remain unverified against a live key."""
+    """QCMobile provider for docket, carrier, and authority data."""
 
     base_url = "https://mobile.fmcsa.dot.gov/qc/services"
 
@@ -89,7 +89,11 @@ class LiveFmcsaProvider:
         detail = self._get(f"carriers/{dot}")
         carrier = detail.get("carrier", detail)
         authority_result = self._get(f"carriers/{dot}/authority")
-        authority = authority_result.get("authority", authority_result)
+        authority = (
+            authority_result.get("carrierAuthority")
+            or authority_result.get("authority")
+            or authority_result
+        )
         common = authority.get("commonAuthorityStatus") or authority.get(
             "contractAuthorityStatus"
         )

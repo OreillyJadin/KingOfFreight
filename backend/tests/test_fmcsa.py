@@ -1,5 +1,41 @@
+from app.integrations.fmcsa import LiveFmcsaProvider
 from app.schemas import CarrierSnapshot
 from app.services.fmcsa import score_carrier
+
+
+def _live_snapshot(monkeypatch, authority_status):
+    payloads = {
+        "carriers/docket-number/135797": {
+            "carrier": {"dotNumber": 80806, "legalName": "J B HUNT TRANSPORT INC"}
+        },
+        "carriers/80806": {
+            "carrier": {
+                "dotNumber": 80806,
+                "legalName": "J B HUNT TRANSPORT INC",
+                "dbaName": "J B HUNT",
+                "allowedToOperate": "Y",
+                "safetyRating": "S",
+                "bipdInsuranceOnFile": "3500",
+                "bipdInsuranceRequired": "Y",
+                "bipdRequiredAmount": "1000",
+                "oosDate": None,
+            }
+        },
+        "carriers/80806/authority": {
+            "carrierAuthority": {
+                "commonAuthorityStatus": authority_status,
+                "contractAuthorityStatus": "A",
+                "brokerAuthorityStatus": "A",
+                "docketNumber": 135797,
+                "dotNumber": 80806,
+                "prefix": "MC",
+            },
+            "_links": {},
+        },
+    }
+    provider = LiveFmcsaProvider()
+    monkeypatch.setattr(provider, "_get", lambda path: payloads[path])
+    return provider.lookup_mc("135797")
 
 
 def base(**updates):
@@ -47,3 +83,22 @@ def test_yellow_rules_and_green_unrated():
         ["Not rated (common for smaller carriers)"],
     )
     assert score_carrier(base()) == ("green", [])
+
+
+def test_live_provider_parses_qcmobile_authority_payload(monkeypatch):
+    snapshot = _live_snapshot(monkeypatch, "A")
+
+    assert snapshot is not None
+    assert snapshot.authority_status == "A"
+    assert snapshot.legal_name == "J B HUNT TRANSPORT INC"
+    assert snapshot.dot_number == "80806"
+    assert snapshot.allowed_to_operate == "Y"
+
+
+def test_inactive_live_authority_is_scored_red(monkeypatch):
+    snapshot = _live_snapshot(monkeypatch, "I")
+
+    assert snapshot is not None
+    flag, reasons = score_carrier(snapshot)
+    assert flag == "red"
+    assert "Operating authority not active" in reasons
