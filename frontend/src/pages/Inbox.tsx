@@ -8,18 +8,18 @@ import {
   Upload,
   WandSparkles,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useToast } from "../useToast";
 import LoadFields from "../components/LoadFields";
+import { ListDetail, ListRow, ListRowSkeleton } from "../components/ListDetail";
 import Modal from "../components/Modal";
 import { EmptyState, ErrorState, FlagBadge, PageHeading, StatusBadge } from "../components/common";
 import {
   Badge,
   Button,
   Card,
-  CardListSkeleton,
   Input,
   Tabs,
   buttonClass,
@@ -27,6 +27,7 @@ import {
 import type { Carrier, Communication } from "../types";
 import { draftFrom, payloadFromDraft, type LoadDraft } from "../load-form";
 import { formatShortDateTime } from "../utils";
+import { useMediaQuery } from "../useMediaQuery";
 
 type Filter = "All" | "BOLs" | "Carrier" | "Check-in replies" | "Other";
 
@@ -37,9 +38,13 @@ function extractedMc(item: Communication) {
 function InboxItem({
   item,
   onReview,
+  onArchived,
+  nextItemId,
 }: {
   item: Communication;
   onReview: (item: Communication) => void;
+  onArchived: (nextItemId?: number) => void;
+  nextItemId?: number;
 }) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
@@ -56,6 +61,7 @@ function InboxItem({
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["inbox"] });
       showToast("Message archived.");
+      onArchived(nextItemId);
     },
     onError: (error: Error) => showToast(error.message, "error"),
   });
@@ -72,7 +78,7 @@ function InboxItem({
   );
   const tagLabel = item.tag.replaceAll("_", " ");
   return (
-    <Card as="article" className="p-4 sm:p-5">
+    <div>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -190,7 +196,7 @@ function InboxItem({
           </Link>
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -346,6 +352,8 @@ function SimulationMenu() {
 export default function Inbox() {
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wide = useMediaQuery("(min-width: 1280px)");
   const { showToast } = useToast();
   const fileInput = useRef<HTMLInputElement>(null);
   const [filter, setFilter] = useState<Filter>("All");
@@ -380,6 +388,70 @@ export default function Inbox() {
     }
     return all;
   }, [filter, inbox.data]);
+  const selectedId = searchParams.get("item");
+  const selectedItem = items.find((item) => String(item.id) === selectedId);
+  const selectedIndex = selectedItem
+    ? items.findIndex((item) => item.id === selectedItem.id)
+    : -1;
+  const nextItemId =
+    selectedIndex >= 0
+      ? (items[selectedIndex + 1] ?? items[selectedIndex - 1])?.id
+      : undefined;
+  useEffect(() => {
+    if (!wide || !items.length || selectedItem) return;
+    const next = new URLSearchParams(searchParams);
+    next.set("item", String(items[0].id));
+    setSearchParams(next, { replace: true });
+  }, [wide, items, selectedItem, searchParams, setSearchParams]);
+  function selectItem(id: number) {
+    const next = new URLSearchParams(searchParams);
+    next.set("item", String(id));
+    setSearchParams(next);
+  }
+  function closeDetail() {
+    const next = new URLSearchParams(searchParams);
+    next.delete("item");
+    setSearchParams(next);
+  }
+  function archiveSelection(nextItemId?: number) {
+    const next = new URLSearchParams(searchParams);
+    next.delete("item");
+    if (wide && nextItemId !== undefined) {
+      next.set("item", String(nextItemId));
+    }
+    setSearchParams(next, { replace: true });
+  }
+  const list = inbox.isPending ? (
+    <ListRowSkeleton />
+  ) : (
+    <Card className="p-2">
+      <ul role="list" aria-label="Inbox messages" className="space-y-1">
+        {items.map((item) => (
+          <li key={item.id}>
+            <ListRow
+              selected={selectedItem?.id === item.id}
+              onSelect={() => selectItem(item.id)}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <Badge className="max-w-[70%] truncate uppercase tracking-wide">
+                  {item.tag.replaceAll("_", " ")}
+                </Badge>
+                <span className="shrink-0 text-xs text-subtle">
+                  {formatShortDateTime(item.created_at)}
+                </span>
+              </div>
+              <span className="mt-2 line-clamp-1 text-sm font-bold text-fg">
+                {item.subject || `${item.channel.toUpperCase()} message`}
+              </span>
+              <span className="mt-1 block truncate text-xs text-muted">
+                From {item.from_addr || "Unknown sender"} · {item.content}
+              </span>
+            </ListRow>
+          </li>
+        ))}
+      </ul>
+    </Card>
+  );
   return (
     <div>
       <PageHeading
@@ -433,9 +505,7 @@ export default function Inbox() {
           message={(inbox.error as Error).message}
           onRetry={() => void inbox.refetch()}
         />
-      ) : inbox.isPending ? (
-        <CardListSkeleton />
-      ) : items.length === 0 ? (
+      ) : !inbox.isPending && items.length === 0 ? (
         <EmptyState
           icon={filter === "All" ? InboxIcon : Mail}
           title={filter === "All" ? "Your inbox is clear" : `No ${filter.toLowerCase()} yet`}
@@ -446,11 +516,26 @@ export default function Inbox() {
           }
         />
       ) : (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          {items.map((item) => (
-            <InboxItem key={item.id} item={item} onReview={setReview} />
-          ))}
-        </div>
+        <ListDetail
+          list={list}
+          detail={
+            selectedItem ? (
+              <InboxItem
+                key={selectedItem.id}
+                item={selectedItem}
+                onReview={setReview}
+                onArchived={archiveSelection}
+                nextItemId={nextItemId}
+              />
+            ) : null
+          }
+          detailTitle={
+            selectedItem
+              ? selectedItem.subject || `${selectedItem.channel.toUpperCase()} message`
+              : "Inbox"
+          }
+          onCloseDetail={closeDetail}
+        />
       )}
       {review && (
         <BolReview

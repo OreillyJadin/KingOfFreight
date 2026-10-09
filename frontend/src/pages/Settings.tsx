@@ -71,16 +71,18 @@ export default function Settings() {
     : ([["Current timezone", form?.broker_timezone ?? "America/Chicago"], ...timezones] as const);
   if (query.isPending || !form) {
     return (
-      <Card className="space-y-5 p-5 sm:p-6">
-        <Skeleton className="h-6 w-40" />
-        <Skeleton className="h-11 w-full" />
-        <Skeleton className="h-11 w-full" />
-        <Skeleton className="h-11 w-2/3" />
-      </Card>
+      <div className="mx-auto max-w-3xl">
+        <Card className="space-y-5 p-5 sm:p-6">
+          <Skeleton className="h-6 w-40" />
+          <Skeleton className="h-11 w-full" />
+          <Skeleton className="h-11 w-full" />
+          <Skeleton className="h-11 w-2/3" />
+        </Card>
+      </div>
     );
   }
   return (
-    <div>
+    <div className="mx-auto max-w-3xl">
       <PageHeading
         eyebrow="Workspace"
         title="Settings"
