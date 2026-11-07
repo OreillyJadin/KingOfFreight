@@ -32,8 +32,8 @@ router = APIRouter(
 )
 _ACTIVE_STAGES = ("awaiting_pickup", "in_transit", "awaiting_delivery")
 _NOTE_TIMESTAMP = re.compile(
-    r"(?P<at>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}|"
-    r"\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*[ap]\.?m\.?)",
+    r"(?<!\d)(?P<at>\d{4}-\d{2}-\d{2}[ \t]+\d{2}:\d{2}:\d{2}|"
+    r"\d{1,2}/\d{1,2}/\d{4}[ \t]+\d{1,2}:\d{2}:\d{2}[ \t]+[ap]m)(?!\d)",
     re.IGNORECASE,
 )
 
@@ -258,16 +258,7 @@ def _parse_note_entries(text: str | None) -> list[dict]:
             if raw_timestamp[4] == "-":
                 timestamp = datetime.strptime(raw_timestamp, "%Y-%m-%d %H:%M:%S")
             else:
-                timestamp = None
-                for date_format in (
-                    "%m/%d/%Y %I:%M:%S %p",
-                    "%m/%d/%Y %I:%M %p",
-                ):
-                    try:
-                        timestamp = datetime.strptime(raw_timestamp, date_format)
-                        break
-                    except ValueError:
-                        continue
+                timestamp = datetime.strptime(raw_timestamp, "%m/%d/%Y %I:%M:%S %p")
         except ValueError:
             timestamp = None
         entry = {
@@ -292,24 +283,33 @@ def _parse_note_entries(text: str | None) -> list[dict]:
     return entries
 
 
-def _latest_note(notes_text: str | None, log_text: str | None) -> dict | None:
+def _latest_note(
+    notes_text: str | None, log_text: str | None, now: datetime
+) -> dict | None:
     entries = _parse_note_entries(notes_text) + _parse_note_entries(log_text)
-    timestamped = [entry for entry in entries if entry["at"]]
-    if timestamped:
-        return max(
-            timestamped,
-            key=lambda entry: datetime.fromisoformat(entry["at"]).astimezone(
-                timezone.utc
-            ),
-        )
-    return entries[0] if entries else None
+    cutoff = now.astimezone(timezone.utc) + timedelta(minutes=5)
+    timestamped = [
+        entry
+        for entry in entries
+        if entry["at"]
+        and datetime.fromisoformat(entry["at"]).astimezone(timezone.utc) <= cutoff
+    ]
+    if not timestamped:
+        return None
+    return max(
+        timestamped,
+        key=lambda entry: datetime.fromisoformat(entry["at"]).astimezone(timezone.utc),
+    )
 
 
 def _hours_since_update(entry: dict | None, now: datetime) -> float | None:
     if not entry or not entry["at"]:
         return None
     updated_at = datetime.fromisoformat(entry["at"]).astimezone(timezone.utc)
-    return round((now.astimezone(timezone.utc) - updated_at).total_seconds() / 3600, 2)
+    elapsed_seconds = (now.astimezone(timezone.utc) - updated_at).total_seconds()
+    if elapsed_seconds < -timedelta(minutes=5).total_seconds():
+        return None
+    return round(max(0, elapsed_seconds) / 3600, 2)
 
 
 def _lane_expressions(level: str):
@@ -856,7 +856,7 @@ def tracking(db: Session = Depends(get_db)) -> dict:
     ).all()
     grouped = {stage: [] for stage in _ACTIVE_STAGES}
     for load in rows:
-        last_note = _latest_note(load.notes_text, load.log_text)
+        last_note = _latest_note(load.notes_text, load.log_text, now)
         hours = _hours_since_update(last_note, now)
         grouped[load.stage].append(
             {

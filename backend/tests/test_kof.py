@@ -260,11 +260,7 @@ def test_date_only_appointment_is_late_after_local_day_with_broker_timezone_fall
 
 
 def test_notes_and_logs_parse_timestamp_formats_newest_first_in_chicago():
-    from app.routers.kof import (
-        _hours_since_update,
-        _latest_note,
-        _parse_note_entries,
-    )
+    from app.routers.kof import _hours_since_update, _latest_note
 
     notes = (
         "11/06/2026 02:49:39 pm Demo User - Older update "
@@ -281,7 +277,7 @@ def test_notes_and_logs_parse_timestamp_formats_newest_first_in_chicago():
     assert entries[1]["author"] == "Demo User"
 
     now = datetime(2026, 11, 7, 18, 15, tzinfo=timezone.utc)
-    latest = _latest_note(notes, "2026-11-07 11:00:00 Demo Logger - Log update")
+    latest = _latest_note(notes, "2026-11-07 11:00:00 Demo Logger - Log update", now)
     assert latest is not None and latest["author"] == "Demo Logger"
     assert _hours_since_update(latest, now) == 1.25
     assert _hours_since_update(None, now) is None
@@ -291,6 +287,51 @@ def test_notes_and_logs_parse_timestamp_formats_newest_first_in_chicago():
         )
         is None
     )
+
+
+def test_note_entries_do_not_split_on_bare_callback_times_or_short_dates():
+    notes = (
+        "11/06/2026 02:49:39 pm SYNTHETIC NAME 03:00:00 pm CALL BACK 3PM ... "
+        "11-09 08:00:00 am CALL BACK 11/09 FIX 11/6/2026\n3:00:00 PM CALL BACK"
+    )
+
+    entries = _parse_note_entries(notes)
+
+    assert len(entries) == 1
+    assert entries[0]["at"] == "2026-11-06T14:49:39-06:00"
+    assert "03:00:00 pm CALL BACK 3PM" in entries[0]["text"]
+    assert "11-09 08:00:00 am CALL BACK 11/09 FIX" in entries[0]["text"]
+    assert "11/6/2026\n3:00:00 PM CALL BACK" in entries[0]["text"]
+
+
+def test_last_note_ignores_future_entries_and_tolerates_small_clock_skew():
+    from app.routers.kof import _hours_since_update, _latest_note
+
+    now = datetime(2026, 11, 7, 18, 15, tzinfo=timezone.utc)
+    notes = (
+        "2026-11-07 10:00:00 Demo Rep - Past update\n"
+        "2026-11-07 12:21:00 Demo Rep - Future callback"
+    )
+    latest = _latest_note(notes, None, now)
+
+    assert latest is not None
+    assert latest["at"] == "2026-11-07T10:00:00-06:00"
+    assert _hours_since_update(latest, now) == 2.25
+    assert (
+        _latest_note("2026-11-07 12:21:00 Demo Rep - Future callback", None, now)
+        is None
+    )
+
+    within_tolerance = _latest_note(
+        "2026-11-07 12:19:00 Demo Rep - Small clock skew", None, now
+    )
+    assert within_tolerance is not None
+    assert within_tolerance["at"] == "2026-11-07T12:19:00-06:00"
+    assert _hours_since_update(within_tolerance, now) == 0
+    too_far_in_future = _parse_note_entries(
+        "2026-11-07 12:21:00 Demo Rep - Future callback"
+    )[0]
+    assert _hours_since_update(too_far_in_future, now) is None
 
 
 def test_kof_client_does_not_follow_list_redirects():
