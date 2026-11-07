@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -8,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import RequestResponseEndpoint
+from starlette.responses import Response
+from starlette.types import Scope
 
 from app.auth import COOKIE_NAME, decode_session, ensure_bootstrap_user, session_user
 from app.config import get_settings
@@ -23,6 +26,20 @@ settings = get_settings()
 logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler(timezone="UTC")
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+
+
+class ImmutableStaticFiles(StaticFiles):
+    def file_response(
+        self,
+        full_path: os.PathLike[str],
+        stat_result: os.stat_result,
+        scope: Scope,
+        status_code: int = 200,
+    ) -> Response:
+        response = super().file_response(full_path, stat_result, scope, status_code)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
 
 
 def _run_tick() -> None:
@@ -125,7 +142,7 @@ def mount_frontend(application: FastAPI, dist_dir: Path = FRONTEND_DIST) -> None
     asset_dir = dist_dir / "assets"
     if asset_dir.is_dir():
         application.mount(
-            "/assets", StaticFiles(directory=asset_dir), name="frontend-assets"
+            "/assets", ImmutableStaticFiles(directory=asset_dir), name="frontend-assets"
         )
 
     @application.get("/{frontend_path:path}", include_in_schema=False)
@@ -136,7 +153,10 @@ def mount_frontend(application: FastAPI, dist_dir: Path = FRONTEND_DIST) -> None
         target = (root / frontend_path).resolve()
         if root not in target.parents and target != root:
             raise HTTPException(status_code=404, detail="Not Found")
-        return FileResponse(target if target.is_file() else root / "index.html")
+        index_file = root / "index.html"
+        response_file = target if target.is_file() else index_file
+        headers = {"Cache-Control": "no-cache"} if response_file == index_file else None
+        return FileResponse(response_file, headers=headers)
 
 
 @app.get("/health")
