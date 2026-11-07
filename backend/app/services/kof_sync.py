@@ -499,6 +499,17 @@ def _execute_sync_run(
         _SYNC_LOCK.release()
 
 
+def fail_interrupted_sync_runs(db: Session) -> int:
+    runs = db.scalars(select(KofSyncRun).where(KofSyncRun.status == "running")).all()
+    finished_at = datetime.now(timezone.utc)
+    for run in runs:
+        run.status = "error"
+        run.finished_at = finished_at
+        run.error = "Interrupted by a server restart"
+    db.commit()
+    return len(runs)
+
+
 def start_sync(kind: str, *, capture_dir: str | Path | None = None) -> int | None:
     with SessionLocal() as credentials_db:
         if get_kof_credentials(credentials_db) is None:
