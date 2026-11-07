@@ -90,55 +90,62 @@ def _table_score(table: Tag) -> tuple[int, int, int, int, int]:
 
 def parse_phprunner_list(html: str | bytes) -> ParsedList:
     soup = BeautifulSoup(html, "lxml")
-    tables = soup.find_all("table")
-    table = max(tables, key=_table_score, default=None)
-    if table is None:
-        return ParsedList([], [], [])
-    header_row = table.select_one("tr.rnr-toprow")
-    if header_row is None:
-        header_row = next(
-            (row for row in table.find_all("tr") if row.find("th", recursive=False)),
-            None,
-        )
-    if header_row is None:
-        return ParsedList([], [], [])
+    try:
+        tables = soup.find_all("table")
+        table = max(tables, key=_table_score, default=None)
+        if table is None:
+            return ParsedList([], [], [])
+        header_row = table.select_one("tr.rnr-toprow")
+        if header_row is None:
+            header_row = next(
+                (
+                    row
+                    for row in table.find_all("tr")
+                    if row.find("th", recursive=False)
+                ),
+                None,
+            )
+        if header_row is None:
+            return ParsedList([], [], [])
 
-    header_cells = header_row.find_all(["th", "td"], recursive=False)
-    headers: list[str | None] = []
-    seen: dict[str, int] = {}
-    for cell in header_cells:
-        label = _normalize_space(cell.get_text(" ", strip=True))
-        if not label:
-            headers.append(None)
-            continue
-        seen[label] = seen.get(label, 0) + 1
-        headers.append(label if seen[label] == 1 else f"{label} ({seen[label]})")
+        header_cells = header_row.find_all(["th", "td"], recursive=False)
+        headers: list[str | None] = []
+        seen: dict[str, int] = {}
+        for cell in header_cells:
+            label = _normalize_space(cell.get_text(" ", strip=True))
+            if not label:
+                headers.append(None)
+                continue
+            seen[label] = seen.get(label, 0) + 1
+            headers.append(label if seen[label] == 1 else f"{label} ({seen[label]})")
 
-    columns = [header for header in headers if header]
-    rows: list[dict[str, str]] = []
-    row_keys: list[str | None] = []
-    for row in table.find_all("tr"):
-        if row is header_row:
-            continue
-        key = _row_key(row)
-        if key is None and "rnr-row" not in row.get("class", []):
-            continue
-        cells = row.find_all(["td", "th"], recursive=False)
-        if not cells:
-            continue
-        if len(cells) != len(headers):
-            if len(cells) > len(headers):
-                cells = cells[-len(headers) :]
-            else:
-                cells = [None] * (len(headers) - len(cells)) + cells
-        parsed = {
-            header: _cell_text(cell) if cell is not None else ""
-            for header, cell in zip(headers, cells, strict=False)
-            if header
-        }
-        rows.append(parsed)
-        row_keys.append(key)
-    return ParsedList(columns, rows, row_keys)
+        columns = [header for header in headers if header]
+        rows: list[dict[str, str]] = []
+        row_keys: list[str | None] = []
+        for row in table.find_all("tr"):
+            if row is header_row:
+                continue
+            key = _row_key(row)
+            if key is None and "rnr-row" not in row.get("class", []):
+                continue
+            cells = row.find_all(["td", "th"], recursive=False)
+            if not cells:
+                continue
+            if len(cells) != len(headers):
+                if len(cells) > len(headers):
+                    cells = cells[-len(headers) :]
+                else:
+                    cells = [None] * (len(headers) - len(cells)) + cells
+            parsed = {
+                header: _cell_text(cell) if cell is not None else ""
+                for header, cell in zip(headers, cells, strict=False)
+                if header
+            }
+            rows.append(parsed)
+            row_keys.append(key)
+        return ParsedList(columns, rows, row_keys)
+    finally:
+        soup.decompose()
 
 
 def parse_money(value: str | None) -> Decimal | None:

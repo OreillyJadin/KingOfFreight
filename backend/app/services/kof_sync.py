@@ -1,9 +1,10 @@
+import gc
+import re
+import threading
 from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-import re
-import threading
 from typing import Any
 
 from sqlalchemy import select
@@ -45,8 +46,8 @@ from app.models import (
 )
 from app.services.kof_credentials import get_kof_credentials
 
-PAGE_SIZE = 500
-MAX_PAGES = 100
+PAGE_SIZE = 100
+MAX_PAGES = 200
 MAX_FULLTEXT_LOADS_PER_SYNC = 60
 FULLTEXT_STAGES = ("confirmation", "awaiting_pickup", "in_transit", "awaiting_delivery")
 _SYNC_LOCK = threading.Lock()
@@ -140,6 +141,7 @@ def _fetch_all_list(
             columns = parsed.columns
         rows.extend(parsed.rows)
         row_keys.extend(parsed.row_keys)
+        gc.collect()
     return FetchedList(definition, columns, rows, row_keys)
 
 
@@ -391,7 +393,7 @@ def _iter_master_pages(
     yield 1, first_html, first_page
     if len(first_page.rows) < PAGE_SIZE:
         return
-    max_pages = MAX_PAGES if full else 2
+    max_pages = MAX_PAGES if full else 10
     for page in range(2, max_pages + 1):
         html, parsed = client.get_list_page(
             MASTER_LIST,
@@ -440,9 +442,8 @@ def sync_with_client(
         _, changed = _upsert_master_rows(
             db, parsed, membership, deleted, stats, stage_changes
         )
+        gc.collect()
         if kind == "incremental" and page == 1 and changed == 0:
-            break
-        if kind == "incremental" and page == 2:
             break
     _refresh_active_fulltext(db, client, stats)
     return stats

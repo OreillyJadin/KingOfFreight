@@ -24,7 +24,9 @@ from app.integrations.kof.parser import (
 from app.models import KofBranch, KofListSnapshot, KofLoad, KofSyncRun
 from app.routers.kof import _parse_note_entries
 from app.services.kof_sync import (
+    PAGE_SIZE,
     SyncStats,
+    _iter_master_pages,
     _master_first_page,
     _order_numbers_descending,
     _refresh_active_fulltext,
@@ -57,6 +59,13 @@ class MockLoginSession:
 def test_phprunner_parser_maps_synthetic_headers_cells_keys_and_notes():
     parsed = parse_phprunner_list(FIXTURE.read_text())
     assert parsed.row_keys == ["700001", "700002"]
+    assert all(isinstance(column, str) for column in parsed.columns)
+    assert all(key is None or isinstance(key, str) for key in parsed.row_keys)
+    assert all(
+        isinstance(label, str) and isinstance(value, str)
+        for row in parsed.rows
+        for label, value in row.items()
+    )
     assert "Order #" in parsed.columns
     assert "Price" in parsed.columns
     first = parsed.rows[0]
@@ -421,6 +430,60 @@ def test_master_first_page_uses_detected_sort_link_to_get_newest_first():
     assert params == {"orderby": "dOrder__"}
     assert client.calls == [None, {"orderby": "dOrder__"}]
     assert _order_numbers_descending(parsed)
+
+
+def test_incremental_sync_processes_at_most_ten_master_pages(monkeypatch, db):
+    from app.services import kof_sync
+
+    first_page = ParsedList([], [{} for _ in range(PAGE_SIZE)], [None] * PAGE_SIZE)
+    requested = []
+
+    class Client:
+        def get_list_page(self, _definition, page, *, page_size, extra_params):
+            requested.append((page, page_size))
+            return (
+                f"page-{page}",
+                ParsedList([], [{} for _ in range(page_size)], [None] * page_size),
+            )
+
+    fetched = {definition.key: None for definition in kof_sync.SALES_LISTS}
+    monkeypatch.setattr(
+        kof_sync, "_fetch_small_lists", lambda *_args: ({}, set(), fetched)
+    )
+    monkeypatch.setattr(kof_sync, "_upsert_directory_lists", lambda *_args: None)
+    monkeypatch.setattr(kof_sync, "_save_snapshot", lambda *_args: None)
+    monkeypatch.setattr(kof_sync, "_refresh_stage_membership", lambda *_args: set())
+    monkeypatch.setattr(
+        kof_sync, "_master_first_page", lambda *_args: ({}, "page-1", first_page)
+    )
+    monkeypatch.setattr(kof_sync, "_upsert_master_rows", lambda *_args: (PAGE_SIZE, 1))
+    monkeypatch.setattr(kof_sync, "_refresh_active_fulltext", lambda *_args: None)
+
+    stats = kof_sync.sync_with_client(db, Client(), "incremental")
+
+    assert stats.master_pages == 10
+    assert requested == [(page, 100) for page in range(2, 11)]
+
+
+def test_full_master_page_iteration_stops_on_a_short_page():
+    class Client:
+        def __init__(self):
+            self.requested = []
+
+        def get_list_page(self, _definition, page, *, page_size, extra_params):
+            self.requested.append(page)
+            count = page_size - 1 if page == 3 else page_size
+            return (
+                f"page-{page}",
+                ParsedList([], [{} for _ in range(count)], [None] * count),
+            )
+
+    client = Client()
+    first_page = ParsedList([], [{} for _ in range(PAGE_SIZE)], [None] * PAGE_SIZE)
+    pages = list(_iter_master_pages(client, {}, "page-1", first_page, full=True))
+
+    assert [page for page, _, _ in pages] == [1, 2, 3]
+    assert client.requested == [2, 3]
 
 
 def test_kof_client_logs_into_root_before_reposting_module_hidden_values():
