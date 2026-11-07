@@ -20,9 +20,21 @@ import { compactMoney, money, monthDay, pct, shortDate } from "../../kof/format"
 import { RangeTabs, useRange } from "../../kof/useRange";
 
 export default function Dashboard() {
-  const { value, setValue, range, label } = useRange("90");
+  const { value, setValue, range, label, month, year, setMonth, setYear } =
+    useRange("month");
   const [params, setParams] = useSearchParams();
-  const interval = params.get("interval") === "month" ? "month" : "week";
+  const intervalParam = params.get("interval");
+  const interval =
+    intervalParam === "week" || intervalParam === "month"
+      ? intervalParam
+      : value === "month"
+        ? "week"
+        : "month";
+  const tableYear = value === "month" ? Number(month.slice(0, 4)) : year;
+  const tableRange =
+    value === "all"
+      ? { start: "2000-01-01" }
+      : { start: `${tableYear}-01-01`, end: `${tableYear}-12-31` };
 
   useEffect(() => {
     document.title = "Dashboard · Fifth Wheel";
@@ -31,6 +43,10 @@ export default function Dashboard() {
   const summary = useQuery({
     queryKey: ["kof", "summary", range, interval],
     queryFn: () => kof.summary(range, interval),
+  });
+  const monthSummary = useQuery({
+    queryKey: ["kof", "summary", tableRange, "month"],
+    queryFn: () => kof.summary(tableRange, "month"),
   });
   const lanes = useQuery({
     queryKey: ["kof", "lanes", range, "city"],
@@ -60,17 +76,40 @@ export default function Dashboard() {
 
   function setInterval(next: "week" | "month") {
     const updated = new URLSearchParams(params);
-    if (next === "week") updated.delete("interval");
-    else updated.set("interval", next);
+    updated.set("interval", next);
     setParams(updated, { replace: true });
   }
+
+  function selectMonth(nextMonth: string) {
+    const updated = new URLSearchParams(params);
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    updated.delete("range");
+    updated.delete("period");
+    if (nextMonth === currentMonth) updated.delete("month");
+    else updated.set("month", nextMonth);
+    setParams(updated, { replace: true });
+  }
+
+  const monthRows = [...(monthSummary.data?.series ?? [])].sort((a, b) =>
+    b.period.localeCompare(a.period),
+  );
 
   const heading = (
     <PageHeading
       eyebrow="Performance"
       title="Dashboard"
-      description={`Revenue, carrier cost and margin across your loads. ${label}.`}
-      action={<RangeTabs value={value} onChange={setValue} />}
+      description={`Freight cost, carrier cost and profit across your loads. ${label}.`}
+      action={
+        <RangeTabs
+          value={value}
+          onChange={setValue}
+          month={month}
+          year={year}
+          setMonth={setMonth}
+          setYear={setYear}
+        />
+      }
     />
   );
   if (showConnectionEmpty) {
@@ -91,19 +130,19 @@ export default function Dashboard() {
         ) : (
           <>
             <Kpi
-              label="Revenue"
+              label="Total freight cost"
               value={compactMoney(totals?.revenue)}
               hint={`${totals?.loads ?? 0} loads`}
             />
-            <Kpi label="Carrier cost" value={compactMoney(totals?.cost)} hint={`Avg ${money(totals?.avg_cost)} / load`} />
-            <Kpi label="Profit" value={compactMoney(totals?.profit)} hint={`Avg ${money(totals?.avg_profit)} / load`} tone="accent" />
+            <Kpi label="Total carrier cost" value={compactMoney(totals?.cost)} hint={`Avg ${money(totals?.avg_cost)} / load`} />
+            <Kpi label="Total profit" value={compactMoney(totals?.profit)} hint={`Avg ${money(totals?.avg_profit)} / load`} tone="accent" />
             <Kpi
               label="Margin"
               value={pct(totals?.margin_pct)}
               hint={
                 totals?.on_time_pct !== null && totals?.on_time_pct !== undefined
                   ? `${pct(totals.on_time_pct, 0)} on time`
-                  : `Avg sell ${money(totals?.avg_price)}`
+                  : `Avg freight cost ${money(totals?.avg_price)}`
               }
             />
           </>
@@ -122,9 +161,63 @@ export default function Dashboard() {
         </div>
       )}
 
+      <Card className="mt-5 min-w-0 overflow-hidden">
+        <h2 className="border-b border-line px-4 py-3 font-bold text-fg">
+          Month by month · {value === "all" ? "All time" : tableYear}
+        </h2>
+        {monthSummary.isPending ? (
+          <TableSkeleton rows={5} />
+        ) : monthSummary.isError ? (
+          <div className="p-4">
+            <ErrorState
+              message={(monthSummary.error as Error).message}
+              onRetry={() => monthSummary.refetch()}
+            />
+          </div>
+        ) : (
+          <DataTable
+            caption="Month-by-month freight cost and profit summary"
+            rows={monthRows}
+            rowKey={(row) => row.period.slice(0, 7)}
+            activeKey={value === "month" ? month : null}
+            cellVerticalAlign="middle"
+            emptyMessage="No loads in this period."
+            columns={[
+              {
+                key: "month",
+                header: "Month",
+                render: (row) => {
+                  const monthValue = row.period.slice(0, 7);
+                  const monthLabel = new Date(`${monthValue}-01T00:00:00`).toLocaleDateString(
+                    undefined,
+                    { month: "short", year: "numeric" },
+                  );
+                  return (
+                    <button
+                      type="button"
+                      aria-pressed={value === "month" && monthValue === month}
+                      onClick={() => selectMonth(monthValue)}
+                      className="inline-flex min-h-11 items-center rounded-lg px-1 text-left font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      {monthLabel}
+                    </button>
+                  );
+                },
+              },
+              { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
+              { key: "revenue", header: "Freight cost", align: "right", render: (row) => <MoneyCell value={row.revenue} /> },
+              { key: "avg_price", header: "Avg freight cost", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
+              { key: "avg_cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+              { key: "profit", header: "Profit", align: "right", render: (row) => <MoneyCell value={row.profit} /> },
+              { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
+            ]}
+          />
+        )}
+      </Card>
+
       <Card className="mt-5 p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="font-bold text-fg">Revenue and profit over time</h2>
+          <h2 className="font-bold text-fg">Freight cost, carrier cost and profit</h2>
           <Tabs
             ariaLabel="Chart interval"
             value={interval}
@@ -171,8 +264,8 @@ export default function Dashboard() {
                   ),
                 },
                 { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
-                { key: "cost", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
-                { key: "price", header: "Avg sell", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
+                { key: "cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+                { key: "price", header: "Avg freight cost", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
                 { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
               ]}
             />
@@ -185,7 +278,7 @@ export default function Dashboard() {
             <TableSkeleton rows={6} />
           ) : (
             <DataTable
-              caption="Top customers by revenue"
+              caption="Top customers by freight cost"
               rows={(customers.data ?? []).slice(0, 10)}
               rowKey={(row) => row.customer}
               emptyMessage="No customer activity in this range."
@@ -201,7 +294,7 @@ export default function Dashboard() {
                   ),
                 },
                 { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
-                { key: "revenue", header: "Revenue", align: "right", render: (row) => <MoneyCell value={row.revenue} /> },
+                { key: "revenue", header: "Freight cost", align: "right", render: (row) => <MoneyCell value={row.revenue} /> },
                 { key: "profit", header: "Profit", align: "right", render: (row) => <MoneyCell value={row.profit} /> },
                 { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
               ]}
@@ -232,8 +325,8 @@ export default function Dashboard() {
                 ),
               },
               { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
-              { key: "cost", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
-              { key: "price", header: "Avg sell", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
+              { key: "cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+              { key: "price", header: "Avg freight cost", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
               { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
             ]}
           />

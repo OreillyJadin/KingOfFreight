@@ -54,7 +54,7 @@ function Detail({ orderNo }: { orderNo: number }) {
 
       <dl className="grid grid-cols-3 gap-3">
         {[
-          ["Sell", money(load.price)],
+          ["Freight cost", money(load.price)],
           ["Cost", money(load.cost)],
           ["Profit", money(load.profit)],
         ].map(([label, value]) => (
@@ -232,7 +232,7 @@ export default function Loads() {
                 </span>
               ),
             },
-            { key: "price", header: "Sell", align: "right", render: (row) => <MoneyCell value={row.price} /> },
+            { key: "price", header: "Freight cost", align: "right", render: (row) => <MoneyCell value={row.price} /> },
             { key: "cost", header: "Cost", align: "right", render: (row) => <MoneyCell value={row.cost} /> },
             {
               key: "margin",

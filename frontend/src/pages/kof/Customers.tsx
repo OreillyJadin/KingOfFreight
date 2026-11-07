@@ -10,7 +10,7 @@ import { shortDate } from "../../kof/format";
 import { RangeTabs, useRange } from "../../kof/useRange";
 
 export default function Customers() {
-  const { value, setValue, range, label } = useRange("365");
+  const { value, setValue, range, month, year, setMonth, setYear } = useRange("year");
   const [filter, setFilter] = useState("");
   useEffect(() => {
     document.title = "Customers · Fifth Wheel";
@@ -32,8 +32,17 @@ export default function Customers() {
       <PageHeading
         eyebrow="Accounts"
         title="Customers"
-        description={`Volume, revenue and margin by customer. ${label}.`}
-        action={<RangeTabs value={value} onChange={setValue} />}
+        description="Volume, freight cost and margin by customer."
+        action={
+          <RangeTabs
+            value={value}
+            onChange={setValue}
+            month={month}
+            year={year}
+            setMonth={setMonth}
+            setYear={setYear}
+          />
+        }
       />
       <label className="relative mb-4 block max-w-sm">
         <span className="sr-only">Filter customers</span>
@@ -61,10 +70,10 @@ export default function Customers() {
                 ),
               },
               { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
-              { key: "revenue", header: "Revenue", align: "right", render: (row) => <MoneyCell value={row.revenue} /> },
+              { key: "revenue", header: "Freight cost", align: "right", render: (row) => <MoneyCell value={row.revenue} /> },
               { key: "cost", header: "Cost", align: "right", render: (row) => <MoneyCell value={row.cost} /> },
               { key: "profit", header: "Profit", align: "right", render: (row) => <MoneyCell value={row.profit} /> },
-              { key: "avg", header: "Avg sell", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
+              { key: "avg", header: "Avg freight cost", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
               { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
               { key: "last", header: "Last load", align: "right", render: (row) => <span className="text-muted">{shortDate(row.last_load_date)}</span> },
             ]}

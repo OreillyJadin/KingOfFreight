@@ -86,7 +86,7 @@ function BranchDetail({ branch, range }: { branch: string; range: { start?: stri
               },
               { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
               { key: "rate", header: "Avg rate", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
-              { key: "cost", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+              { key: "cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
               { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
               { key: "last", header: "Last", align: "right", render: (row) => <span className="text-muted">{shortDate(row.last_date)}</span> },
             ]}
@@ -106,7 +106,7 @@ function BranchDetail({ branch, range }: { branch: string; range: { start?: stri
               { key: "lane", header: "Lane", render: (row) => <span className="font-semibold text-fg">{row.origin} → {row.destination}</span> },
               { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
               { key: "rate", header: "Avg rate", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
-              { key: "cost", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+              { key: "cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
               {
                 key: "range",
                 header: "Cost range",
@@ -154,7 +154,8 @@ function BranchDetail({ branch, range }: { branch: string; range: { start?: stri
 }
 
 export default function Branches() {
-  const { value, setValue, range, label } = useRange("365");
+  const { value, setValue, range, label, month, year, setMonth, setYear } =
+    useRange("year");
   const [params, setParams] = useSearchParams();
   const [filter, setFilter] = useState(params.get("q") ?? "");
   const customer = params.get("customer") ?? "united rentals";
@@ -220,7 +221,7 @@ export default function Branches() {
             },
             { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
             { key: "rate", header: "Avg rate", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
-            { key: "cost", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+            { key: "cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
             { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
           ]}
         />
@@ -234,7 +235,16 @@ export default function Branches() {
         eyebrow="Accounts"
         title="Branches"
         description={`Every ${customer === "united rentals" ? "United Rentals" : "customer"} branch you haul for, with average rate and cost. ${label}.`}
-        action={<RangeTabs value={value} onChange={(next: RangeValue) => setValue(next)} />}
+        action={
+          <RangeTabs
+            value={value}
+            onChange={(next: RangeValue) => setValue(next)}
+            month={month}
+            year={year}
+            setMonth={setMonth}
+            setYear={setYear}
+          />
+        }
       />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <label className="relative min-w-[220px] max-w-sm flex-1">

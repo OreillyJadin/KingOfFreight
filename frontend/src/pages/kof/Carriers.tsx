@@ -10,7 +10,8 @@ import { pct, shortDate } from "../../kof/format";
 import { RangeTabs, useRange } from "../../kof/useRange";
 
 export default function Carriers() {
-  const { value, setValue, range, label } = useRange("365");
+  const { value, setValue, range, label, month, year, setMonth, setYear } =
+    useRange("year");
   const [filter, setFilter] = useState("");
   const [view, setView] = useState<"carriers" | "lanes">("carriers");
   useEffect(() => {
@@ -44,7 +45,16 @@ export default function Carriers() {
         eyebrow="Capacity"
         title="Carriers & lanes"
         description={`What you pay, who you use, and where. ${label}.`}
-        action={<RangeTabs value={value} onChange={setValue} />}
+        action={
+          <RangeTabs
+            value={value}
+            onChange={setValue}
+            month={month}
+            year={year}
+            setMonth={setMonth}
+            setYear={setYear}
+          />
+        }
       />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Tabs
@@ -91,7 +101,7 @@ export default function Carriers() {
                 ),
               },
               { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
-              { key: "avg", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+              { key: "avg", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
               { key: "total", header: "Total paid", align: "right", render: (row) => <MoneyCell value={row.total_cost} /> },
               ...(hasOnTime
                 ? [
@@ -122,7 +132,7 @@ export default function Carriers() {
             columns={[
               { key: "lane", header: "Lane", render: (row) => <span className="font-semibold text-fg">{row.origin} → {row.destination}</span> },
               { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
-              { key: "avg", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+              { key: "avg", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
               {
                 key: "range",
                 header: "Cost range",
@@ -134,7 +144,7 @@ export default function Carriers() {
                 ),
               },
               { key: "last", header: "Last paid", align: "right", render: (row) => <MoneyCell value={row.last_cost} /> },
-              { key: "sell", header: "Avg sell", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
+              { key: "sell", header: "Avg freight cost", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
               { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
             ]}
           />
