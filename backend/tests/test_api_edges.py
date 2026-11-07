@@ -99,7 +99,8 @@ def test_frontend_static_serving_has_spa_fallback_without_shadowing_api(tmp_path
     assets.mkdir(parents=True)
     index_html = "<!doctype html><title>KingOfFreight</title>"
     (dist / "index.html").write_text(index_html)
-    (assets / "app.js").write_text("console.log('frontend')")
+    (dist / "favicon.svg").write_text("<svg>favicon</svg>")
+    (assets / "app-abc.js").write_text("console.log('frontend')")
 
     test_app = FastAPI()
 
@@ -109,9 +110,23 @@ def test_frontend_static_serving_has_spa_fallback_without_shadowing_api(tmp_path
 
     mount_frontend(test_app, dist)
     client = TestClient(test_app)
-    assert client.get("/").text == index_html
-    assert client.get("/status").text == index_html
-    assert client.get("/assets/app.js").text == "console.log('frontend')"
+
+    for path in ("/", "/dashboard", "/index.html"):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.text == index_html
+        assert response.headers["cache-control"] == "no-cache"
+
+    asset_response = client.get("/assets/app-abc.js")
+    assert asset_response.status_code == 200
+    assert asset_response.text == "console.log('frontend')"
+    assert "immutable" in asset_response.headers["cache-control"]
+
+    missing_asset = client.get("/assets/missing.js")
+    assert missing_asset.status_code == 404
+    assert "immutable" not in missing_asset.headers.get("cache-control", "")
+
+    assert client.get("/favicon.svg").text == "<svg>favicon</svg>"
     assert client.get("/api/ping").json() == {"ok": True}
     assert client.get("/api/not-found").status_code == 404
 
