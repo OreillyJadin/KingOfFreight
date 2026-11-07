@@ -41,9 +41,10 @@ account flow.
 
 KOF sync is read-only: it signs in to the authorized intranet modules, reads
 list pages, and stores loads and sales-list snapshots in PostgreSQL. Set
-`KOF_USERNAME` and `KOF_PASSWORD` to configure the site account. Sync remains
-disabled unless `KOF_SYNC_ENABLED=true`; when enabled with
-`SCHEDULER_ENABLED=true`, the scheduler runs incremental syncs at
+`KOF_USERNAME` and `KOF_PASSWORD` to configure the site account, or enter the
+KOF login in Settings instead. Environment credentials require
+`KOF_SYNC_ENABLED=true`; credentials saved in Settings enable scheduled sync
+when `SCHEDULER_ENABLED=true`. The scheduler runs incremental syncs at
 `KOF_SYNC_INTERVAL_MINUTES` intervals and a full sync at
 `KOF_FULL_SYNC_HOUR_UTC`. An authenticated broker can also start a full or
 incremental sync with `POST /api/kof/sync?kind=full` or
@@ -160,11 +161,11 @@ All settings can be supplied in `.env` or as environment variables:
 | `CHECKIN_DEFAULT_CHANNEL` | `sms` | Default driver check-in channel (`sms` or `email`) |
 | `SCHEDULER_ENABLED` | `true` | Enable in-process check-in and inbox scheduler |
 | `SCHEDULER_INTERVAL_SECONDS` | `60` | Scheduler interval |
-| `KOF_SYNC_ENABLED` | `false` | Enable scheduled KOF synchronization |
+| `KOF_SYNC_ENABLED` | `false` | Enable scheduled KOF synchronization for environment credentials |
 | `KOF_USERNAME` | empty | KOF intranet username |
 | `KOF_PASSWORD` | empty | KOF intranet password |
 | `KOF_BASE_URL` | `https://kingsoffreight.com/` | KOF intranet base URL |
-| `KOF_SYNC_INTERVAL_MINUTES` | `15` | Incremental sync interval when KOF sync and scheduler are enabled |
+| `KOF_SYNC_INTERVAL_MINUTES` | `15` | Incremental sync interval when credentials and scheduler are enabled |
 | `KOF_FULL_SYNC_HOUR_UTC` | `8` | UTC hour for the daily full sync |
 | `ENV` | `development` | Dev simulation endpoints mount only in development |
 | `SMS_PROVIDER` | `mock` | `mock` or `twilio` |

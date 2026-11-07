@@ -1351,3 +1351,334 @@ def test_lanes_and_carrier_top_lanes_exclude_unknown_states(client, db):
     carriers = client.get("/api/kof/carriers")
     assert carriers.status_code == 200
     assert carriers.json()[0]["top_lanes"] == ["Chicago, IL → Des Moines, IA"]
+
+
+def test_kof_connection_put_encrypts_password_and_get_hides_it(client, db, monkeypatch):
+    from app.config import get_settings
+    from app.models import KofConnection
+    from app.routers import kof as kof_router
+    from app.services.kof_credentials import decrypt_kof_password
+
+    monkeypatch.delenv("KOF_USERNAME", raising=False)
+    monkeypatch.delenv("KOF_PASSWORD", raising=False)
+    get_settings.cache_clear()
+    calls = []
+
+    class LoginClient:
+        def __init__(self, username, password, base_url):
+            calls.append(("construct", username, password, base_url))
+
+        def login(self):
+            calls.append(("login",))
+
+        def close(self):
+            calls.append(("close",))
+
+    monkeypatch.setattr(kof_router, "KofClient", LoginClient)
+    monkeypatch.setattr(
+        kof_router, "start_sync", lambda kind: calls.append(("sync", kind))
+    )
+
+    assert client.get("/api/kof/connection").json() == {
+        "configured": False,
+        "source": None,
+        "username": None,
+    }
+    response = client.put(
+        "/api/kof/connection",
+        json={"username": "  synthetic-user  ", "password": "synthetic-password"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json() == {
+        "configured": True,
+        "source": "app",
+        "username": "synthetic-user",
+    }
+    connection = db.get(KofConnection, 1)
+    assert connection is not None
+    assert connection.password_encrypted != "synthetic-password"
+    assert decrypt_kof_password(connection.password_encrypted) == "synthetic-password"
+    assert client.get("/api/kof/connection").json() == response.json()
+    assert "password" not in response.json()
+    assert calls[-1] == ("sync", "full")
+    get_settings.cache_clear()
+
+
+def test_kof_connection_put_bad_login_saves_nothing(client, db, monkeypatch):
+    from app.config import get_settings
+    from app.models import KofConnection
+    from app.routers import kof as kof_router
+
+    monkeypatch.delenv("KOF_USERNAME", raising=False)
+    monkeypatch.delenv("KOF_PASSWORD", raising=False)
+    get_settings.cache_clear()
+    secret = "synthetic-password"
+
+    class LoginClient:
+        def __init__(self, *_args):
+            pass
+
+        def login(self):
+            raise KofLoginError(f"Rejected {secret}")
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(kof_router, "KofClient", LoginClient)
+    response = client.put(
+        "/api/kof/connection",
+        json={"username": "synthetic-user", "password": secret},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "detail": "Couldn't sign in to King of Freight with that username and password"
+    }
+    assert secret not in response.text
+    assert db.get(KofConnection, 1) is None
+    get_settings.cache_clear()
+
+
+def test_kof_connection_environment_credentials_take_precedence(
+    client, db, monkeypatch
+):
+    from app.config import get_settings
+    from app.models import KofConnection
+    from app.services.kof_credentials import encrypt_kof_password
+
+    db.add(
+        KofConnection(
+            id=1,
+            username="stored-user",
+            password_encrypted=encrypt_kof_password("stored-password"),
+        )
+    )
+    db.commit()
+    monkeypatch.setenv("KOF_USERNAME", "environment-user")
+    monkeypatch.setenv("KOF_PASSWORD", "environment-password")
+    get_settings.cache_clear()
+
+    response = client.get("/api/kof/connection")
+    assert response.status_code == 200
+    assert response.json() == {
+        "configured": True,
+        "source": "env",
+        "username": "environment-user",
+    }
+    rejected = client.put(
+        "/api/kof/connection",
+        json={"username": "replacement-user", "password": "replacement-password"},
+    )
+    assert rejected.status_code == 409
+    db.refresh(db.get(KofConnection, 1))
+    assert db.get(KofConnection, 1).username == "stored-user"
+    get_settings.cache_clear()
+
+
+def test_kof_connection_delete_removes_application_credentials(client, db, monkeypatch):
+    from app.config import get_settings
+    from app.models import KofConnection
+    from app.services.kof_credentials import encrypt_kof_password
+
+    monkeypatch.delenv("KOF_USERNAME", raising=False)
+    monkeypatch.delenv("KOF_PASSWORD", raising=False)
+    get_settings.cache_clear()
+    db.add(
+        KofConnection(
+            id=1,
+            username="synthetic-user",
+            password_encrypted=encrypt_kof_password("synthetic-password"),
+        )
+    )
+    db.commit()
+
+    response = client.delete("/api/kof/connection")
+
+    assert response.status_code == 204
+    assert db.get(KofConnection, 1) is None
+    assert client.get("/api/kof/connection").json() == {
+        "configured": False,
+        "source": None,
+        "username": None,
+    }
+    get_settings.cache_clear()
+
+
+def test_kof_sync_resolves_database_credentials(monkeypatch, db):
+    from app.config import get_settings
+    from app.models import KofConnection
+    from app.services import kof_sync
+    from app.services.kof_credentials import encrypt_kof_password
+
+    monkeypatch.delenv("KOF_USERNAME", raising=False)
+    monkeypatch.delenv("KOF_PASSWORD", raising=False)
+    get_settings.cache_clear()
+    db.add(
+        KofConnection(
+            id=1,
+            username="database-user",
+            password_encrypted=encrypt_kof_password("database-password"),
+        )
+    )
+    run = KofSyncRun(
+        kind="full",
+        status="running",
+        started_at=datetime.now(timezone.utc),
+        loads_upserted=0,
+        counts={},
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    received = {}
+
+    class SyncClient:
+        def __init__(self, username, password, _base_url, **_kwargs):
+            received["credentials"] = (username, password)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+    def fake_sync(_db, _client, kind):
+        received["kind"] = kind
+        return SyncStats()
+
+    monkeypatch.setattr(kof_sync, "KofClient", SyncClient)
+    monkeypatch.setattr(kof_sync, "sync_with_client", fake_sync)
+    assert kof_sync._SYNC_LOCK.acquire(blocking=False)
+    kof_sync._execute_sync_run(run.id, "full")
+
+    db.refresh(run)
+    assert received == {
+        "credentials": ("database-user", "database-password"),
+        "kind": "full",
+    }
+    assert run.status == "ok"
+    get_settings.cache_clear()
+
+
+def test_kof_sync_redacts_database_password_from_run_errors(monkeypatch, db):
+    from app.config import get_settings
+    from app.models import KofConnection
+    from app.services import kof_sync
+    from app.services.kof_credentials import encrypt_kof_password
+
+    monkeypatch.delenv("KOF_USERNAME", raising=False)
+    monkeypatch.delenv("KOF_PASSWORD", raising=False)
+    get_settings.cache_clear()
+    password = "synthetic-password"
+    db.add(
+        KofConnection(
+            id=1,
+            username="database-user",
+            password_encrypted=encrypt_kof_password(password),
+        )
+    )
+    run = KofSyncRun(
+        kind="full",
+        status="running",
+        started_at=datetime.now(timezone.utc),
+        loads_upserted=0,
+        counts={},
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+
+    class SyncClient:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            pass
+
+    def failing_sync(*_args):
+        raise KofSiteError(f"Failed using {password}")
+
+    monkeypatch.setattr(kof_sync, "KofClient", SyncClient)
+    monkeypatch.setattr(kof_sync, "sync_with_client", failing_sync)
+    assert kof_sync._SYNC_LOCK.acquire(blocking=False)
+    kof_sync._execute_sync_run(run.id, "full")
+
+    db.refresh(run)
+    assert run.status == "error"
+    assert password not in run.error
+    assert "[redacted]" in run.error
+    get_settings.cache_clear()
+
+
+def test_kof_client_rejects_a_login_page_after_submitting_credentials():
+    login_page = (
+        b'<form action="Lindex.php"><input name="txt_uname_email">'
+        b'<input name="txt_password"></form>'
+    )
+
+    class RejectedLoginClient(KofClient):
+        def _request(self, method, url, **_kwargs):
+            response = Response()
+            response.status_code = 200
+            response.url = url
+            response._content = login_page
+            return response
+
+        def _login_post(self, url, data):
+            assert data["txt_uname_email"] == "synthetic-user"
+            assert data["txt_password"] == "synthetic-password"
+            response = Response()
+            response.status_code = 200
+            response.url = url
+            response._content = login_page
+            return response
+
+    client = RejectedLoginClient("synthetic-user", "synthetic-password")
+    with pytest.raises(KofLoginError, match="credentials were rejected"):
+        client.login()
+
+
+def test_scheduled_sync_skips_missing_credentials_and_uses_app_credentials(
+    monkeypatch, db
+):
+    from app.config import get_settings
+    from app.models import KofConnection
+    from app.services import kof_sync
+    from app.services.kof_credentials import encrypt_kof_password
+
+    monkeypatch.delenv("KOF_USERNAME", raising=False)
+    monkeypatch.delenv("KOF_PASSWORD", raising=False)
+    monkeypatch.setenv("KOF_SYNC_ENABLED", "false")
+    get_settings.cache_clear()
+    started = []
+    monkeypatch.setattr(kof_sync, "start_sync", lambda kind: started.append(kind))
+
+    kof_sync.run_scheduled_kof_sync()
+    assert started == []
+
+    db.add(
+        KofConnection(
+            id=1,
+            username="database-user",
+            password_encrypted=encrypt_kof_password("database-password"),
+        )
+    )
+    db.commit()
+    kof_sync.run_scheduled_kof_sync()
+    assert len(started) == 1
+
+    monkeypatch.setenv("KOF_USERNAME", "environment-user")
+    monkeypatch.setenv("KOF_PASSWORD", "environment-password")
+    get_settings.cache_clear()
+    kof_sync.run_scheduled_kof_sync()
+    assert len(started) == 1
+
+    monkeypatch.setenv("KOF_SYNC_ENABLED", "true")
+    get_settings.cache_clear()
+    kof_sync.run_scheduled_kof_sync()
+    assert len(started) == 2
+    get_settings.cache_clear()

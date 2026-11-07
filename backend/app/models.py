@@ -323,6 +323,24 @@ class User(Base):
     )
 
 
+class KofConnection(Base):
+    __tablename__ = "kof_connection"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_kof_connection_singleton"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(120), nullable=False)
+    password_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, onupdate=utcnow
+    )
+    updated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+
+
 class KofLoad(Base):
     __tablename__ = "kof_loads"
 

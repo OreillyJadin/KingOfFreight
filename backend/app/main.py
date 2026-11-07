@@ -53,21 +53,16 @@ async def lifespan(_: FastAPI):
                 seconds=settings.scheduler_interval_seconds,
                 id="inbox-poll",
             )
-        if (
-            settings.kof_sync_enabled
-            and settings.kof_username
-            and settings.kof_password
-        ):
-            from app.services.kof_sync import run_scheduled_kof_sync
+        from app.services.kof_sync import run_scheduled_kof_sync
 
-            scheduler.add_job(
-                run_scheduled_kof_sync,
-                "interval",
-                minutes=max(1, settings.kof_sync_interval_minutes),
-                id="kof-sync",
-                max_instances=1,
-                coalesce=True,
-            )
+        scheduler.add_job(
+            run_scheduled_kof_sync,
+            "interval",
+            minutes=max(1, settings.kof_sync_interval_minutes),
+            id="kof-sync",
+            max_instances=1,
+            coalesce=True,
+        )
         scheduler.start()
     yield
     if scheduler.running:
