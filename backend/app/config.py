@@ -36,6 +36,13 @@ class Settings(BaseSettings):
     checkin_default_channel: str = "sms"
     scheduler_enabled: bool = True
     scheduler_interval_seconds: int = 60
+    bootstrap_username: str | None = None
+    kof_sync_enabled: bool = False
+    kof_username: str | None = None
+    kof_password: str | None = None
+    kof_base_url: str = "https://kingsoffreight.com/"
+    kof_sync_interval_minutes: int = Field(default=15, ge=1)
+    kof_full_sync_hour_utc: int = Field(default=8, ge=0, le=23)
     sms_provider: str = "mock"
     twilio_account_sid: str | None = None
     twilio_auth_token: str | None = None

@@ -1,0 +1,825 @@
+from collections import defaultdict
+from datetime import date, datetime, timedelta, timezone
+import re
+from typing import Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import (
+    Integer,
+    String,
+    and_,
+    case,
+    cast,
+    func,
+    literal,
+    or_,
+    select,
+)
+from sqlalchemy.orm import Session
+
+from app.auth import require_broker
+from app.config import get_settings
+from app.db import get_db
+from app.integrations.kof.parser import parse_time
+from app.models import KofListSnapshot, KofLoad, KofSyncRun
+from app.services.kof_sync import start_sync
+
+router = APIRouter(
+    prefix="/api/kof",
+    tags=["KOF"],
+    dependencies=[Depends(require_broker)],
+)
+_ACTIVE_STAGES = ("awaiting_pickup", "in_transit", "awaiting_delivery")
+_NOTE_PATTERN = re.compile(
+    r"(?P<at>\d{1,2}/\d{1,2}/\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*[ap]\.?m\.?)\s+"
+    r"(?P<author>[^-]{1,100}?)\s*-\s*(?P<text>.*?)(?=(?:\s+\d{1,2}/\d{1,2}/\d{2,4}\s+\d{1,2}:\d{2})|$)",
+    re.IGNORECASE,
+)
+
+
+def _date_range(start: date | None, end: date | None) -> tuple[date, date]:
+    end_date = end or date.today()
+    start_date = start or end_date - timedelta(days=89)
+    if start_date > end_date:
+        raise HTTPException(status_code=422, detail="start must be on or before end")
+    return start_date, end_date
+
+
+def _date_filters(start: date | None, end: date | None) -> tuple[date, date, list]:
+    start_date, end_date = _date_range(start, end)
+    return (
+        start_date,
+        end_date,
+        [
+            KofLoad.is_deleted.is_(False),
+            KofLoad.date_of_sale >= start_date,
+            KofLoad.date_of_sale <= end_date,
+        ],
+    )
+
+
+def _number(value) -> float | None:
+    if value is None:
+        return None
+    return round(float(value), 2)
+
+
+def _margin_expression():
+    return func.sum(KofLoad.profit) * 100.0 / func.nullif(func.sum(KofLoad.price), 0)
+
+
+def _on_time_expressions():
+    numerator = func.sum(case((KofLoad.on_time.is_(True), 1), else_=0))
+    denominator = func.sum(case((KofLoad.on_time.is_not(None), 1), else_=0))
+    return numerator, denominator
+
+
+def _on_time_percent(numerator, denominator) -> float | None:
+    if not denominator:
+        return None
+    return round(float(numerator or 0) * 100 / float(denominator), 2)
+
+
+def _period_expression(interval: str, dialect: str):
+    if dialect == "postgresql":
+        return cast(func.date_trunc(interval, KofLoad.date_of_sale), String)
+    if interval == "month":
+        return func.strftime("%Y-%m-01", KofLoad.date_of_sale)
+    weekday = cast(func.strftime("%w", KofLoad.date_of_sale), Integer)
+    days_from_monday = (weekday + 6) % 7
+    return func.date(
+        KofLoad.date_of_sale,
+        func.printf("-%d days", days_from_monday),
+    )
+
+
+def _period_string(value) -> str:
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    return str(value)[:10]
+
+
+def _status_reached(value: str | None) -> bool:
+    normalized = (value or "").strip().lower()
+    if normalized in {"1", "yes", "y", "true", "checked", "✓", "☑", "x"}:
+        return True
+    if normalized in {"", "0", "no", "n", "false", "unchecked", "pending"}:
+        return False
+    if normalized.startswith(("not ", "unpaid")):
+        return False
+    return any(
+        phrase in normalized
+        for phrase in (
+            "picked up",
+            "picked-up",
+            "in transit",
+            "in-transit",
+            "delivered",
+            "complete",
+            "paid",
+            "billed",
+            "invoiced",
+            "confirmed",
+            "received",
+        )
+    )
+
+
+def _appointment_passed(
+    appointment: datetime | None,
+    tz_name: str | None,
+    now: datetime,
+    *,
+    time_known: bool = True,
+) -> bool:
+    if appointment is None or not tz_name:
+        return False
+    try:
+        zone = ZoneInfo(tz_name)
+    except (ZoneInfoNotFoundError, ValueError):
+        return False
+    if not time_known:
+        appointment = appointment.replace(hour=23, minute=59, second=59)
+    local_appointment = appointment.replace(tzinfo=zone)
+    return local_appointment.astimezone(timezone.utc) < now
+
+
+def _raw_time_known(load: KofLoad, labels: tuple[str, ...]) -> bool:
+    values = {
+        re.sub(r"[^a-z0-9]+", "", key.lower()): value for key, value in load.raw.items()
+    }
+    return any(
+        parse_time(values.get(re.sub(r"[^a-z0-9]+", "", label.lower())))
+        for label in labels
+    )
+
+
+def _is_late(load: KofLoad, now: datetime | None = None) -> bool:
+    now_utc = now or datetime.now(timezone.utc)
+    pick_time_known = _raw_time_known(load, ("Pick Time", "Pickup Time"))
+    delivery_time_known = _raw_time_known(
+        load, ("Delivery Time", "Drop Time", "Delivery Appointment Time")
+    )
+    if load.stage == "awaiting_pickup":
+        return bool(
+            not _status_reached(load.pick_status)
+            and _appointment_passed(
+                load.pick_at, load.pick_tz, now_utc, time_known=pick_time_known
+            )
+        )
+    if load.stage in {"in_transit", "awaiting_delivery"}:
+        return bool(
+            not _status_reached(load.delivery_status)
+            and _appointment_passed(
+                load.delivery_at,
+                load.drop_tz,
+                now_utc,
+                time_known=delivery_time_known,
+            )
+        )
+    if not _status_reached(load.pick_status):
+        return bool(
+            _appointment_passed(
+                load.pick_at, load.pick_tz, now_utc, time_known=pick_time_known
+            )
+        )
+    return bool(
+        not _status_reached(load.delivery_status)
+        and _appointment_passed(
+            load.delivery_at,
+            load.drop_tz,
+            now_utc,
+            time_known=delivery_time_known,
+        )
+    )
+
+
+def _load_row(load: KofLoad, now: datetime | None = None) -> dict:
+    return {
+        "order_no": load.order_no,
+        "date_of_sale": load.date_of_sale.isoformat() if load.date_of_sale else None,
+        "customer": load.customer,
+        "branch": load.branch,
+        "carrier": load.carrier,
+        "mc": load.mc,
+        "origin_city": load.origin_city,
+        "origin_state": load.origin_state,
+        "dest_city": load.dest_city,
+        "dest_state": load.dest_state,
+        "pick_at": load.pick_at.isoformat() if load.pick_at else None,
+        "pick_tz": load.pick_tz,
+        "delivery_at": load.delivery_at.isoformat() if load.delivery_at else None,
+        "drop_tz": load.drop_tz,
+        "equipment": load.equipment,
+        "weight": _number(load.weight),
+        "price": _number(load.price),
+        "cost": _number(load.cost),
+        "profit": _number(load.profit),
+        "stage": load.stage,
+        "billed_status": load.billed_status,
+        "paid_status": load.paid_status,
+        "late": _is_late(load, now),
+    }
+
+
+def _parse_note_entries(text: str | None, *, include_author: bool) -> list[dict]:
+    if not text or not text.strip():
+        return []
+    entries = []
+    for match in _NOTE_PATTERN.finditer(text):
+        try:
+            timestamp = datetime.strptime(
+                re.sub(r"\s+", " ", match.group("at").replace(".", "")),
+                "%m/%d/%Y %I:%M:%S %p"
+                if match.group("at").count(":") == 2
+                else "%m/%d/%Y %I:%M %p",
+            )
+        except ValueError:
+            timestamp = None
+        entry = {
+            "at": timestamp.isoformat() if timestamp else None,
+            "text": match.group("text").strip(),
+        }
+        if include_author:
+            entry["author"] = match.group("author").strip()
+        entries.append(entry)
+    if entries:
+        return entries
+    entry = {"at": None, "text": text.strip()}
+    if include_author:
+        entry["author"] = None
+    return [entry]
+
+
+def _lane_expressions(level: str):
+    if level == "state":
+        return (
+            func.coalesce(KofLoad.origin_state, "Unknown"),
+            func.coalesce(KofLoad.dest_state, "Unknown"),
+        )
+    origin = case(
+        (
+            and_(
+                KofLoad.origin_city.is_not(None),
+                KofLoad.origin_state.is_not(None),
+            ),
+            KofLoad.origin_city + literal(", ") + KofLoad.origin_state,
+        ),
+        (KofLoad.origin_city.is_not(None), KofLoad.origin_city),
+        else_=func.coalesce(KofLoad.origin_state, "Unknown"),
+    )
+    destination = case(
+        (
+            and_(
+                KofLoad.dest_city.is_not(None),
+                KofLoad.dest_state.is_not(None),
+            ),
+            KofLoad.dest_city + literal(", ") + KofLoad.dest_state,
+        ),
+        (KofLoad.dest_city.is_not(None), KofLoad.dest_city),
+        else_=func.coalesce(KofLoad.dest_state, "Unknown"),
+    )
+    return origin, destination
+
+
+def _average_summary(db: Session, filters: list) -> dict:
+    on_time_num, on_time_den = _on_time_expressions()
+    row = db.execute(
+        select(
+            func.count(KofLoad.order_no),
+            func.sum(KofLoad.price),
+            func.sum(KofLoad.cost),
+            func.sum(KofLoad.profit),
+            func.avg(KofLoad.price),
+            func.avg(KofLoad.cost),
+            func.avg(KofLoad.profit),
+            _margin_expression(),
+            on_time_num,
+            on_time_den,
+        ).where(*filters)
+    ).one()
+    return {
+        "loads": int(row[0] or 0),
+        "revenue": _number(row[1]) or 0,
+        "cost": _number(row[2]) or 0,
+        "profit": _number(row[3]) or 0,
+        "margin_pct": _number(row[7]),
+        "avg_price": _number(row[4]),
+        "avg_cost": _number(row[5]),
+        "avg_profit": _number(row[6]),
+        "on_time_pct": _on_time_percent(row[8], row[9]),
+    }
+
+
+@router.get("/sync")
+def sync_status(db: Session = Depends(get_db)) -> dict:
+    settings = get_settings()
+    last_run = db.scalar(
+        select(KofSyncRun).order_by(KofSyncRun.started_at.desc()).limit(1)
+    )
+    last_success = db.scalar(
+        select(KofSyncRun.finished_at)
+        .where(KofSyncRun.status == "ok")
+        .order_by(KofSyncRun.finished_at.desc())
+        .limit(1)
+    )
+    return {
+        "configured": bool(settings.kof_username and settings.kof_password),
+        "enabled": settings.kof_sync_enabled,
+        "running": bool(last_run and last_run.status == "running"),
+        "load_count": int(db.scalar(select(func.count(KofLoad.order_no))) or 0),
+        "last_run": (
+            {
+                "id": last_run.id,
+                "kind": last_run.kind,
+                "status": last_run.status,
+                "started_at": last_run.started_at,
+                "finished_at": last_run.finished_at,
+                "loads_upserted": last_run.loads_upserted,
+                "error": last_run.error,
+            }
+            if last_run
+            else None
+        ),
+        "last_success_at": last_success,
+    }
+
+
+@router.post("/sync", status_code=202)
+def start_sync_endpoint(
+    kind: Literal["incremental", "full"] = Query(default="incremental"),
+) -> dict[str, bool]:
+    settings = get_settings()
+    if not settings.kof_username or not settings.kof_password:
+        raise HTTPException(status_code=400, detail="KOF sync is not configured")
+    try:
+        run_id = start_sync(kind)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail="KOF sync is not configured"
+        ) from exc
+    if run_id is None:
+        raise HTTPException(status_code=409, detail="KOF sync is already running")
+    return {"started": True}
+
+
+@router.get("/sales")
+def sales(db: Session = Depends(get_db)) -> dict:
+    keys = (
+        "leads_no_callback",
+        "leads_callback",
+        "priority_leads",
+        "past_due",
+        "charge_backs",
+        "shipped_30",
+        "not_shipped_30",
+        "open_live_loads",
+    )
+    snapshots = {
+        record.key: record
+        for record in db.scalars(
+            select(KofListSnapshot).where(KofListSnapshot.key.in_(keys))
+        )
+    }
+    return {
+        "lists": [
+            {
+                "key": key,
+                "label": snapshots[key].label if key in snapshots else key,
+                "count": snapshots[key].count if key in snapshots else 0,
+                "columns": snapshots[key].columns if key in snapshots else [],
+                "rows": snapshots[key].rows if key in snapshots else [],
+            }
+            for key in keys
+        ]
+    }
+
+
+@router.get("/summary")
+def summary(
+    start: date | None = None,
+    end: date | None = None,
+    interval: Literal["week", "month"] = "week",
+    db: Session = Depends(get_db),
+) -> dict:
+    start_date, end_date, filters = _date_filters(start, end)
+    totals = _average_summary(db, filters)
+    period = _period_expression(interval, db.bind.dialect.name)
+    series_rows = db.execute(
+        select(
+            period.label("period"),
+            func.count(KofLoad.order_no),
+            func.sum(KofLoad.price),
+            func.sum(KofLoad.cost),
+            func.sum(KofLoad.profit),
+            _margin_expression(),
+        )
+        .where(*filters)
+        .group_by(period)
+        .order_by(period)
+    ).all()
+    series = [
+        {
+            "period": _period_string(row[0]),
+            "loads": int(row[1] or 0),
+            "revenue": _number(row[2]) or 0,
+            "cost": _number(row[3]) or 0,
+            "profit": _number(row[4]) or 0,
+            "margin_pct": _number(row[5]),
+        }
+        for row in series_rows
+    ]
+    equipment = func.coalesce(KofLoad.equipment, "Unknown")
+    equipment_rows = db.execute(
+        select(
+            equipment.label("equipment"),
+            func.count(KofLoad.order_no),
+            func.avg(KofLoad.price),
+            func.avg(KofLoad.cost),
+            _margin_expression(),
+        )
+        .where(*filters)
+        .group_by(equipment)
+        .order_by(func.count(KofLoad.order_no).desc())
+    ).all()
+    return {
+        "totals": totals,
+        "series": series,
+        "by_equipment": [
+            {
+                "equipment": row[0],
+                "loads": int(row[1] or 0),
+                "avg_price": _number(row[2]),
+                "avg_cost": _number(row[3]),
+                "margin_pct": _number(row[4]),
+            }
+            for row in equipment_rows
+        ],
+    }
+
+
+@router.get("/lanes")
+def lanes(
+    start: date | None = None,
+    end: date | None = None,
+    level: Literal["state", "city"] = "state",
+    min_loads: int = Query(default=1, ge=1),
+    limit: int = Query(default=100, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    _, _, filters = _date_filters(start, end)
+    origin, destination = _lane_expressions(level)
+    metrics = db.execute(
+        select(
+            origin.label("origin"),
+            destination.label("destination"),
+            func.count(KofLoad.order_no),
+            func.avg(KofLoad.price),
+            func.avg(KofLoad.cost),
+            func.avg(KofLoad.profit),
+            _margin_expression(),
+            func.min(KofLoad.cost),
+            func.max(KofLoad.cost),
+        )
+        .where(*filters)
+        .group_by(origin, destination)
+        .having(func.count(KofLoad.order_no) >= min_loads)
+        .order_by(func.count(KofLoad.order_no).desc(), origin, destination)
+        .limit(limit)
+    ).all()
+    ranked = (
+        select(
+            origin.label("origin"),
+            destination.label("destination"),
+            KofLoad.cost.label("last_cost"),
+            KofLoad.date_of_sale.label("last_date"),
+            func.row_number()
+            .over(
+                partition_by=(origin, destination),
+                order_by=(KofLoad.date_of_sale.desc(), KofLoad.order_no.desc()),
+            )
+            .label("position"),
+        )
+        .where(*filters)
+        .subquery()
+    )
+    last_rows = db.execute(
+        select(
+            ranked.c.origin,
+            ranked.c.destination,
+            ranked.c.last_cost,
+            ranked.c.last_date,
+        ).where(ranked.c.position == 1)
+    ).all()
+    last_by_lane = {(row[0], row[1]): (row[2], row[3]) for row in last_rows}
+    return [
+        {
+            "origin": row[0],
+            "destination": row[1],
+            "loads": int(row[2] or 0),
+            "avg_price": _number(row[3]),
+            "avg_cost": _number(row[4]),
+            "avg_profit": _number(row[5]),
+            "margin_pct": _number(row[6]),
+            "min_cost": _number(row[7]),
+            "max_cost": _number(row[8]),
+            "last_cost": _number(last_by_lane.get((row[0], row[1]), (None, None))[0]),
+            "last_date": (
+                last_by_lane[(row[0], row[1])][1].isoformat()
+                if last_by_lane.get((row[0], row[1]), (None, None))[1]
+                else None
+            ),
+        }
+        for row in metrics
+    ]
+
+
+@router.get("/customers")
+def customers(
+    start: date | None = None,
+    end: date | None = None,
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    _, _, filters = _date_filters(start, end)
+    rows = db.execute(
+        select(
+            KofLoad.customer,
+            func.count(KofLoad.order_no),
+            func.sum(KofLoad.price),
+            func.sum(KofLoad.cost),
+            func.sum(KofLoad.profit),
+            _margin_expression(),
+            func.avg(KofLoad.price),
+            func.max(KofLoad.date_of_sale),
+        )
+        .where(*filters, KofLoad.customer.is_not(None))
+        .group_by(KofLoad.customer)
+        .order_by(func.sum(KofLoad.profit).desc())
+    ).all()
+    return [
+        {
+            "customer": row[0],
+            "loads": int(row[1] or 0),
+            "revenue": _number(row[2]) or 0,
+            "cost": _number(row[3]) or 0,
+            "profit": _number(row[4]) or 0,
+            "margin_pct": _number(row[5]),
+            "avg_price": _number(row[6]),
+            "last_load_date": row[7].isoformat() if row[7] else None,
+        }
+        for row in rows
+    ]
+
+
+@router.get("/carriers")
+def carriers(
+    start: date | None = None,
+    end: date | None = None,
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    _, _, filters = _date_filters(start, end)
+    on_time_num, on_time_den = _on_time_expressions()
+    rows = db.execute(
+        select(
+            KofLoad.carrier,
+            KofLoad.mc,
+            func.count(KofLoad.order_no),
+            func.sum(KofLoad.cost),
+            func.avg(KofLoad.cost),
+            on_time_num,
+            on_time_den,
+            func.max(KofLoad.date_of_sale),
+        )
+        .where(*filters, KofLoad.carrier.is_not(None))
+        .group_by(KofLoad.carrier, KofLoad.mc)
+        .order_by(func.sum(KofLoad.cost).desc())
+    ).all()
+    origin, destination = _lane_expressions("city")
+    lane_rows = db.execute(
+        select(
+            KofLoad.carrier,
+            KofLoad.mc,
+            origin,
+            destination,
+            func.count(KofLoad.order_no).label("loads"),
+        )
+        .where(*filters, KofLoad.carrier.is_not(None))
+        .group_by(KofLoad.carrier, KofLoad.mc, origin, destination)
+        .order_by(KofLoad.carrier, KofLoad.mc, func.count(KofLoad.order_no).desc())
+    ).all()
+    top_lanes: dict[tuple[str, str | None], list[str]] = defaultdict(list)
+    for row in lane_rows:
+        key = (row[0], row[1])
+        lane = f"{row[2]} → {row[3]}"
+        if lane not in top_lanes[key] and len(top_lanes[key]) < 3:
+            top_lanes[key].append(lane)
+    return [
+        {
+            "carrier": row[0],
+            "mc": row[1],
+            "loads": int(row[2] or 0),
+            "total_cost": _number(row[3]) or 0,
+            "avg_cost": _number(row[4]),
+            "on_time_pct": _on_time_percent(row[5], row[6]),
+            "last_load_date": row[7].isoformat() if row[7] else None,
+            "top_lanes": top_lanes.get((row[0], row[1]), []),
+        }
+        for row in rows
+    ]
+
+
+def _apply_load_filters(
+    query,
+    *,
+    q: str | None,
+    stage: str | None,
+    customer: str | None,
+    carrier: str | None,
+    origin_state: str | None,
+    dest_state: str | None,
+    start: date | None,
+    end: date | None,
+):
+    filters = [KofLoad.is_deleted.is_(False)]
+    if start is not None:
+        filters.append(KofLoad.date_of_sale >= start)
+    if end is not None:
+        filters.append(KofLoad.date_of_sale <= end)
+    if stage:
+        filters.append(KofLoad.stage == stage)
+    if customer:
+        filters.append(KofLoad.customer.ilike(f"%{customer}%"))
+    if carrier:
+        filters.append(KofLoad.carrier.ilike(f"%{carrier}%"))
+    if origin_state:
+        filters.append(KofLoad.origin_state.ilike(origin_state))
+    if dest_state:
+        filters.append(KofLoad.dest_state.ilike(dest_state))
+    if q:
+        like = f"%{q}%"
+        filters.append(
+            or_(
+                cast(KofLoad.order_no, String).ilike(like),
+                KofLoad.customer.ilike(like),
+                KofLoad.carrier.ilike(like),
+                KofLoad.mc.ilike(like),
+                KofLoad.origin_city.ilike(like),
+                KofLoad.origin_state.ilike(like),
+                KofLoad.dest_city.ilike(like),
+                KofLoad.dest_state.ilike(like),
+            )
+        )
+    return query.where(*filters)
+
+
+@router.get("/loads")
+def loads(
+    q: str | None = None,
+    stage: str | None = None,
+    customer: str | None = None,
+    carrier: str | None = None,
+    origin_state: str | None = None,
+    dest_state: str | None = None,
+    start: date | None = None,
+    end: date | None = None,
+    sort: str = "-date_of_sale",
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=50, ge=1, le=500),
+    db: Session = Depends(get_db),
+) -> dict:
+    base = _apply_load_filters(
+        select(KofLoad),
+        q=q,
+        stage=stage,
+        customer=customer,
+        carrier=carrier,
+        origin_state=origin_state,
+        dest_state=dest_state,
+        start=start,
+        end=end,
+    )
+    count_query = base.with_only_columns(func.count(KofLoad.order_no))
+    total = int(db.scalar(count_query) or 0)
+    sort_fields = {
+        "order_no": KofLoad.order_no,
+        "date_of_sale": KofLoad.date_of_sale,
+        "customer": KofLoad.customer,
+        "carrier": KofLoad.carrier,
+        "price": KofLoad.price,
+        "cost": KofLoad.cost,
+        "profit": KofLoad.profit,
+        "stage": KofLoad.stage,
+    }
+    descending = sort.startswith("-")
+    sort_field = sort[1:] if descending else sort
+    sort_expression = sort_fields.get(sort_field, KofLoad.date_of_sale)
+    if descending:
+        sort_expression = sort_expression.desc()
+    query = base.order_by(sort_expression, KofLoad.order_no.desc())
+    records = db.scalars(query.offset((page - 1) * page_size).limit(page_size)).all()
+    now = datetime.now(timezone.utc)
+    return {
+        "total": total,
+        "items": [_load_row(record, now) for record in records],
+    }
+
+
+@router.get("/loads/{order_no}")
+def load_detail(order_no: int, db: Session = Depends(get_db)) -> dict:
+    load = db.get(KofLoad, order_no)
+    if load is None or load.is_deleted:
+        raise HTTPException(status_code=404, detail="KOF load not found")
+    detail = _load_row(load)
+    detail.update(
+        {
+            "shipper": {
+                "company": load.shipper_company,
+                "address": load.shipper_address,
+                "city": load.shipper_city,
+                "state": load.shipper_state,
+                "zip": load.shipper_zip,
+                "phone": load.shipper_phone,
+                "email": load.shipper_email,
+            },
+            "consignee": {
+                "company": load.consignee_company,
+                "address": load.consignee_address,
+                "city": load.consignee_city,
+                "state": load.consignee_state,
+                "zip": load.consignee_zip,
+                "phone": load.consignee_phone,
+                "email": load.consignee_email,
+            },
+            "po": load.po,
+            "pu": load.pu,
+            "invoice_no": load.invoice_no,
+            "product_description": load.product_description,
+            "carrier_contact": {
+                "name": load.carrier_contact_name,
+                "phone": load.carrier_contact_phone,
+                "email": load.carrier_contact_email,
+                "dispatch_contact": load.dispatch_contact,
+                "dispatch_phone": load.dispatch_phone,
+            },
+            "notes": _parse_note_entries(load.notes_text, include_author=True),
+            "log": _parse_note_entries(load.log_text, include_author=False),
+            "raw": load.raw or {},
+        }
+    )
+    return detail
+
+
+@router.get("/tracking")
+def tracking(db: Session = Depends(get_db)) -> dict:
+    now = datetime.now(timezone.utc)
+    rows = db.scalars(
+        select(KofLoad)
+        .where(
+            KofLoad.is_deleted.is_(False),
+            KofLoad.stage.in_(_ACTIVE_STAGES),
+        )
+        .order_by(KofLoad.date_of_sale.desc(), KofLoad.order_no.desc())
+    ).all()
+    grouped = {stage: [] for stage in _ACTIVE_STAGES}
+    for load in rows:
+        notes = _parse_note_entries(load.notes_text, include_author=False)
+        logs = _parse_note_entries(load.log_text, include_author=False)
+        last_note = max(
+            notes + logs,
+            key=lambda entry: entry["at"] or "",
+            default=None,
+        )
+        updated_at = None
+        if last_note and last_note["at"]:
+            try:
+                updated_at = datetime.fromisoformat(last_note["at"]).replace(
+                    tzinfo=timezone.utc
+                )
+            except ValueError:
+                updated_at = None
+        if updated_at is None:
+            updated_at = load.synced_at
+        hours = (
+            round((now - updated_at).total_seconds() / 3600, 2) if updated_at else None
+        )
+        grouped[load.stage].append(
+            {
+                **_load_row(load, now),
+                "last_note": last_note,
+                "hours_since_update": hours,
+            }
+        )
+    labels = {
+        "awaiting_pickup": "Awaiting Pickup",
+        "in_transit": "In Transit",
+        "awaiting_delivery": "Awaiting Delivery",
+    }
+    return {
+        "stages": [
+            {"key": stage, "label": labels[stage], "loads": grouped[stage]}
+            for stage in _ACTIVE_STAGES
+        ]
+    }
