@@ -37,6 +37,23 @@ MULTISTOP_FIXTURE = Path(__file__).parent / "fixtures" / "kof_multistop_syntheti
 FULLTEXT_FIXTURE = Path(__file__).parent / "fixtures" / "kof_fulltext_synthetic.json"
 
 
+class MockLoginSession:
+    def __init__(self, responses):
+        self.responses = iter(responses)
+        self.calls = []
+
+    def request(self, method, url, **kwargs):
+        assert kwargs["allow_redirects"] is False
+        self.calls.append((method, url, kwargs))
+        status, content, headers = next(self.responses)
+        response = Response()
+        response.status_code = status
+        response.url = url
+        response._content = content
+        response.headers.update(headers)
+        return response
+
+
 def test_phprunner_parser_maps_synthetic_headers_cells_keys_and_notes():
     parsed = parse_phprunner_list(FIXTURE.read_text())
     assert parsed.row_keys == ["700001", "700002"]
@@ -407,44 +424,24 @@ def test_master_first_page_uses_detected_sort_link_to_get_newest_first():
 
 
 def test_kof_client_logs_into_root_before_reposting_module_hidden_values():
-    from requests import Response
-
-    class LoginSession:
-        def __init__(self):
-            self.calls = []
-
-        def request(self, method, url, **kwargs):
-            self.calls.append((method, url, kwargs))
-            response = Response()
-            response.url = url
-            response.headers = {}
-            if url.endswith("/Lindex.php") and method == "GET":
-                response.status_code = 200
-                response._content = (
-                    b'<form action="Lindex.php"><input name="csrf" value="root">'
-                    b'<input name="txt_uname_email"><input name="txt_password"></form>'
-                )
-            elif url.endswith("/Lindex.php"):
-                response.status_code = 302
-                response.headers["Location"] = "/emphome.php"
-                response._content = b""
-            elif url.endswith("/emphome.php"):
-                response.status_code = 200
-                response._content = (
-                    b'<form action="my_dispatch/login.php">'
-                    b'<input type="hidden" name="module_token" value="synthetic">'
-                    b"</form>"
-                )
-            else:
-                response.status_code = 302
-                response.headers["Location"] = (
-                    "/my_dispatch/Master_Record_Sheet_list.php"
-                )
-                response._content = b""
-            return response
+    login_form = (
+        b'<form action="Lindex.php"><input name="csrf" value="root">'
+        b'<input name="txt_uname_email"><input name="txt_password"></form>'
+    )
+    home_page = (
+        b'<form action="my_dispatch/login.php">'
+        b'<input type="hidden" name="module_token" value="synthetic"></form>'
+    )
 
     client = KofClient("synthetic-user", "synthetic-password")
-    session = LoginSession()
+    session = MockLoginSession(
+        [
+            (200, login_form, {}),
+            (302, login_form, {"Location": "/emphome.php"}),
+            (200, home_page, {}),
+            (302, b"", {"Location": "/my_dispatch/Master_Record_Sheet_list.php"}),
+        ]
+    )
     client.session = session
     client.login_module("my_dispatch")
 
@@ -460,6 +457,42 @@ def test_kof_client_logs_into_root_before_reposting_module_hidden_values():
     assert all(call[2]["allow_redirects"] is False for call in session.calls)
     assert session.calls[1][2]["data"]["txt_uname_email"] == "synthetic-user"
     assert session.calls[3][2]["data"] == {"module_token": "synthetic"}
+
+
+def test_kof_client_rejects_emphome_redirect_after_login_post():
+    login_form = (
+        b'<form action="Lindex.php"><input name="txt_uname_email">'
+        b'<input name="txt_password"></form>'
+    )
+    client = KofClient("synthetic-user", "synthetic-password")
+    client.session = MockLoginSession(
+        [
+            (200, login_form, {}),
+            (302, login_form, {"Location": "/emphome.php"}),
+            (302, b"", {"Location": "/Lindex.php"}),
+        ]
+    )
+
+    with pytest.raises(KofLoginError, match="was redirected"):
+        client.login()
+
+
+def test_kof_client_rejects_login_form_on_emphome_after_login_post():
+    login_form = (
+        b'<form action="Lindex.php"><input name="txt_uname_email">'
+        b'<input name="txt_password"></form>'
+    )
+    client = KofClient("synthetic-user", "synthetic-password")
+    client.session = MockLoginSession(
+        [
+            (200, login_form, {}),
+            (302, login_form, {"Location": "/emphome.php"}),
+            (200, login_form, {}),
+        ]
+    )
+
+    with pytest.raises(KofLoginError, match="credentials were rejected"):
+        client.login()
 
 
 def test_kof_client_accepts_empty_phprunner_list():

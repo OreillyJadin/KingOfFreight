@@ -54,6 +54,7 @@ class KofClient:
             }
         )
         self._root_authenticated = False
+        self._home_response: requests.Response | None = None
         self._authenticated_modules: set[str] = set()
 
     def close(self) -> None:
@@ -140,11 +141,13 @@ class KofClient:
         data["txt_uname_email"] = self.username
         data["txt_password"] = self.password
         response = self._login_post(post_url, data)
-        if response.status_code in {401, 403} or self._looks_like_login(
-            response.content
-        ):
+        if response.status_code in {401, 403}:
+            raise KofLoginError("KOF credentials were rejected")
+        home = self._request("GET", urljoin(self.base_url, "emphome.php"))
+        if self._looks_like_login(home.content):
             raise KofLoginError("KOF credentials were rejected")
         self._root_authenticated = True
+        self._home_response = home
 
     def _looks_like_login(self, content: bytes) -> bool:
         soup = BeautifulSoup(content, "lxml")
@@ -159,7 +162,10 @@ class KofClient:
         if module not in {"my_dispatch", "sales"}:
             raise KofSiteError("Requested KOF module is not allowed")
         self.login()
-        home = self._request("GET", urljoin(self.base_url, "emphome.php"))
+        home = self._home_response
+        self._home_response = None
+        if home is None:
+            home = self._request("GET", urljoin(self.base_url, "emphome.php"))
         soup = BeautifulSoup(home.content, "lxml")
         prefix = f"{module}/"
         form = next(
