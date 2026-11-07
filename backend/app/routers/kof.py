@@ -371,15 +371,37 @@ def _branch_text(raw: dict, key: str) -> str | None:
     return value or None
 
 
+def _strip_branch_suffixes(value: str) -> str:
+    normalized = value.strip().upper()
+    normalized = re.sub(r"\s+-\s+[^,]*$", "", normalized)
+    normalized = re.sub(r"\s+\d{5}(?:-\d{4})?$", "", normalized)
+    normalized = re.sub(r"\s+[A-Z]{1,2}\d{1,3}$", "", normalized)
+    return normalized.strip()
+
+
 def _parse_branch_label(label: str) -> tuple[str | None, str | None]:
-    normalized = label.strip().upper()
-    normalized = re.sub(r"\s+(?:-\s*)?(?:[A-Z]{1,2})?\d{1,3}$", "", normalized)
+    normalized = _strip_branch_suffixes(label)
     match = re.search(r"(?:,\s*|\s+)([A-Z]{2})$", normalized)
     if not match:
         return None, None
     city = normalized[: match.start()].strip(" ,")
     city = re.sub(r"^[A-Z]{1,2}\d{1,3}\s+", "", city)
     return city.title() or None, match.group(1)
+
+
+def _clean_branch_city(value: str, state: str | None) -> str | None:
+    parsed_city, _ = _parse_branch_label(value)
+    if parsed_city:
+        return parsed_city
+    normalized = _strip_branch_suffixes(value)
+    if state:
+        normalized = re.sub(
+            rf"(?:,\s*|\s+){re.escape(state.strip().upper())}$",
+            "",
+            normalized,
+        )
+    normalized = re.sub(r"^[A-Z]{1,2}\d{1,3}\s+", "", normalized)
+    return normalized.strip(" ,").title() or None
 
 
 def _matching_branch_raw(
@@ -403,9 +425,18 @@ def _matching_branch_raw(
 
 
 def _branch_location(label: str, raw: dict) -> tuple[str | None, str | None]:
-    parsed_city, parsed_state = _parse_branch_label(label)
-    city = _branch_text(raw, "City") or parsed_city
-    state = _branch_text(raw, "State/Province") or parsed_state
+    parsed_label_city, parsed_label_state = _parse_branch_label(label)
+    raw_city = _branch_text(raw, "City")
+    raw_state = _branch_text(raw, "State/Province")
+    parsed_raw_city, parsed_raw_state = (
+        _parse_branch_label(raw_city) if raw_city else (None, None)
+    )
+    state = raw_state or parsed_raw_state or parsed_label_state
+    city = (
+        parsed_raw_city or _clean_branch_city(raw_city, state)
+        if raw_city
+        else parsed_label_city
+    )
     return (
         _format_city_label(city),
         state.upper() if state else None,

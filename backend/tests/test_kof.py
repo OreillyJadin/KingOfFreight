@@ -1002,12 +1002,33 @@ def test_loads_sort_descending_places_null_dates_last(client, db):
         ("Arlington TX - 1", ("Arlington", "TX")),
         ("NORTH VALLEY, TX H73", ("North Valley", "TX")),
         ("G09 SAMPLE CITY, MO", ("Sample City", "MO")),
+        ("BEAUMONT, TX 77705-4415", ("Beaumont", "TX")),
+        ("BEAUMONT, TX - Trench", ("Beaumont", "TX")),
+        ("C35 AUSTIN TX", ("Austin", "TX")),
     ),
 )
 def test_branch_label_location_parsing(label, expected):
     from app.routers.kof import _parse_branch_label
 
     assert _parse_branch_label(label) == expected
+
+
+@pytest.mark.parametrize(
+    ("city", "state", "expected"),
+    (
+        ("BEAUMONT, TX 77705-4415", "TX", ("Beaumont", "TX")),
+        ("BEAUMONT, TX - Trench", "TX", ("Beaumont", "TX")),
+        ("BEAUMONT 77705-4415", "TX", ("Beaumont", "TX")),
+        ("C35 AUSTIN TX", None, ("Austin", "TX")),
+    ),
+)
+def test_branch_location_cleans_city_metadata(city, state, expected):
+    from app.routers.kof import _branch_location
+
+    assert (
+        _branch_location("UNPARSEABLE LABEL", {"City": city, "State/Province": state})
+        == expected
+    )
 
 
 def test_branch_analytics_endpoints_use_metadata_and_exclude_deleted_loads(client, db):
