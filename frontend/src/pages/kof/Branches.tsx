@@ -86,7 +86,7 @@ function BranchDetail({ branch, range }: { branch: string; range: { start?: stri
               },
               { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
               { key: "rate", header: "Avg rate", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
-              { key: "cost", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+              { key: "cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
               { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
               { key: "last", header: "Last", align: "right", render: (row) => <span className="text-muted">{shortDate(row.last_date)}</span> },
             ]}
@@ -106,7 +106,7 @@ function BranchDetail({ branch, range }: { branch: string; range: { start?: stri
               { key: "lane", header: "Lane", render: (row) => <span className="font-semibold text-fg">{row.origin} → {row.destination}</span> },
               { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
               { key: "rate", header: "Avg rate", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
-              { key: "cost", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+              { key: "cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
               {
                 key: "range",
                 header: "Cost range",
@@ -221,7 +221,7 @@ export default function Branches() {
             },
             { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
             { key: "rate", header: "Avg rate", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
-            { key: "cost", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+            { key: "cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
             { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
           ]}
         />

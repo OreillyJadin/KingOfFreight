@@ -101,7 +101,7 @@ export default function Carriers() {
                 ),
               },
               { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
-              { key: "avg", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+              { key: "avg", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
               { key: "total", header: "Total paid", align: "right", render: (row) => <MoneyCell value={row.total_cost} /> },
               ...(hasOnTime
                 ? [
@@ -132,7 +132,7 @@ export default function Carriers() {
             columns={[
               { key: "lane", header: "Lane", render: (row) => <span className="font-semibold text-fg">{row.origin} → {row.destination}</span> },
               { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
-              { key: "avg", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+              { key: "avg", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
               {
                 key: "range",
                 header: "Cost range",

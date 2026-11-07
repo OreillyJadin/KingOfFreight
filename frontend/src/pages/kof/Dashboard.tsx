@@ -207,7 +207,7 @@ export default function Dashboard() {
               { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
               { key: "revenue", header: "Freight cost", align: "right", render: (row) => <MoneyCell value={row.revenue} /> },
               { key: "avg_price", header: "Avg freight cost", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
-              { key: "avg_cost", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+              { key: "avg_cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
               { key: "profit", header: "Profit", align: "right", render: (row) => <MoneyCell value={row.profit} /> },
               { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
             ]}
@@ -264,7 +264,7 @@ export default function Dashboard() {
                   ),
                 },
                 { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
-                { key: "cost", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+                { key: "cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
                 { key: "price", header: "Avg freight cost", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
                 { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
               ]}
@@ -325,7 +325,7 @@ export default function Dashboard() {
                 ),
               },
               { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
-              { key: "cost", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+              { key: "cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
               { key: "price", header: "Avg freight cost", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
               { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
             ]}
