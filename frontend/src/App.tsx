@@ -14,6 +14,7 @@ import Dashboard from "./pages/kof/Dashboard";
 import KofTracking from "./pages/kof/KofTracking";
 import Loads from "./pages/kof/Loads";
 import Customers from "./pages/kof/Customers";
+import Branches from "./pages/kof/Branches";
 import Carriers from "./pages/kof/Carriers";
 import Sales from "./pages/kof/Sales";
 import { setBrokerTimeZone } from "./utils";
@@ -37,6 +38,7 @@ function ProtectedApp() {
         <Route path="/tracking" element={<KofTracking />} />
         <Route path="/loads" element={<Loads />} />
         <Route path="/customers" element={<Customers />} />
+        <Route path="/branches" element={<Branches />} />
         <Route path="/carriers" element={<Carriers />} />
         <Route path="/sales" element={<Sales />} />
         <Route path="/inbox" element={<Inbox />} />

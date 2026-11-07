@@ -32,8 +32,8 @@ export default function Dashboard() {
     queryFn: () => kof.summary(range, interval),
   });
   const lanes = useQuery({
-    queryKey: ["kof", "lanes", range, "state"],
-    queryFn: () => kof.lanes(range, "state", 2, 10),
+    queryKey: ["kof", "lanes", range, "city"],
+    queryFn: () => kof.lanes(range, "city", 2, 10),
   });
   const customers = useQuery({
     queryKey: ["kof", "customers", range],

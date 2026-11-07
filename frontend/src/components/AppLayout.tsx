@@ -13,6 +13,7 @@ import {
   Route,
   Settings,
   Truck,
+  Warehouse,
   X,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
@@ -37,6 +38,7 @@ const kofTabs = [
   { to: "/tracking", label: "Tracking", short: "Tracking", icon: Radar },
   { to: "/loads", label: "Loads", short: "Loads", icon: Package },
   { to: "/customers", label: "Customers", short: "Customers", icon: Building2 },
+  { to: "/branches", label: "Branches", short: "Branches", icon: Warehouse },
   { to: "/carriers", label: "Carriers & lanes", short: "Carriers", icon: Route },
   { to: "/sales", label: "Sales", short: "Sales", icon: Briefcase },
 ];
@@ -49,6 +51,7 @@ const mobileTabs = [
   { to: "/inbox", label: "Inbox", icon: Mail, key: "inbox" },
   { to: "/truckstop", label: "TruckStop", icon: Truck, key: "truckstop" },
   { to: "/customers", label: "Customers", icon: Building2, key: "" },
+  { to: "/branches", label: "Branches", icon: Warehouse, key: "" },
   { to: "/carriers", label: "Carriers", icon: Route, key: "" },
   { to: "/sales", label: "Sales", icon: Briefcase, key: "" },
 ];
@@ -169,6 +172,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       "/tracking": "Tracking · Fifth Wheel",
       "/loads": "Loads · Fifth Wheel",
       "/customers": "Customers · Fifth Wheel",
+      "/branches": "Branches · Fifth Wheel",
       "/carriers": "Carriers & lanes · Fifth Wheel",
       "/sales": "Sales · Fifth Wheel",
     };

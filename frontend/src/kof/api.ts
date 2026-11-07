@@ -154,6 +154,47 @@ export type KofSalesList = {
   rows: string[][];
 };
 
+export type KofBranch = {
+  branch: string;
+  customer: string | null;
+  city: string | null;
+  state: string | null;
+  loads: number;
+  revenue: number;
+  cost: number;
+  profit: number;
+  margin_pct: number | null;
+  avg_price: number | null;
+  avg_cost: number | null;
+  last_load_date: string | null;
+  top_lanes: string[];
+  working_status: string | null;
+};
+
+export type KofPickupSite = {
+  company: string | null;
+  city: string | null;
+  state: string | null;
+  loads: number;
+  avg_price: number | null;
+  avg_cost: number | null;
+  margin_pct: number | null;
+  last_date: string | null;
+};
+
+export type KofBranchDetail = {
+  branch: string;
+  customer: string | null;
+  city: string | null;
+  state: string | null;
+  contact: { name: string | null; phone: string | null; email: string | null; address: string | null } | null;
+  working_status: string | null;
+  totals: Omit<KofTotals, "on_time_pct">;
+  lanes: KofLane[];
+  pickup_sites: KofPickupSite[];
+  recent_loads: KofLoadRow[];
+};
+
 export type DateRange = { start?: string; end?: string };
 
 function qs(params: Record<string, string | number | undefined | null>) {
@@ -183,8 +224,20 @@ export const kof = {
     request<{ started: boolean }>(`/kof/sync${qs({ kind })}`, { method: "POST" }),
   summary: (range: DateRange, interval: "week" | "month") =>
     request<KofSummary>(`/kof/summary${qs({ ...range, interval })}`),
-  lanes: (range: DateRange, level: "state" | "city", minLoads = 1, limit = 100) =>
-    request<KofLane[]>(`/kof/lanes${qs({ ...range, level, min_loads: minLoads, limit })}`),
+  lanes: (
+    range: DateRange,
+    level: "state" | "city",
+    minLoads = 1,
+    limit = 100,
+    filters: { branch?: string; customer?: string; origin_city?: string } = {},
+  ) =>
+    request<KofLane[]>(
+      `/kof/lanes${qs({ ...range, ...filters, level, min_loads: minLoads, limit })}`,
+    ),
+  branches: (range: DateRange, customer: string) =>
+    request<KofBranch[]>(`/kof/branches${qs({ ...range, customer })}`),
+  branch: (branch: string, range: DateRange) =>
+    request<KofBranchDetail>(`/kof/branches/detail${qs({ ...range, branch })}`),
   customers: (range: DateRange) => request<KofCustomer[]>(`/kof/customers${qs(range)}`),
   carriers: (range: DateRange) => request<KofCarrier[]>(`/kof/carriers${qs(range)}`),
   loads: (query: LoadQuery) =>
