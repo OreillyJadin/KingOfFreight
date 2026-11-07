@@ -19,7 +19,7 @@ export function useRange(defaultValue: RangeValue = "90") {
   const value: RangeValue =
     raw && rangePresets.some((preset) => preset.value === raw) ? raw : defaultValue;
   const preset = rangePresets.find((item) => item.value === value)!;
-  const range = preset.days ? rangeForDays(preset.days) : {};
+  const range = preset.days ? rangeForDays(preset.days) : { start: "2000-01-01" };
 
   function setValue(next: RangeValue) {
     const updated = new URLSearchParams(params);
