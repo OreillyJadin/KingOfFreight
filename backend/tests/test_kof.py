@@ -20,11 +20,14 @@ from app.integrations.kof.parser import (
     parse_row_key_or_order,
     parse_time,
     strip_more_suffix,
+    strip_unselected_option_markup,
 )
 from app.models import KofBranch, KofListSnapshot, KofLoad, KofSyncRun
 from app.routers.kof import _parse_note_entries
 from app.services.kof_sync import (
+    PAGE_SIZE,
     SyncStats,
+    _iter_master_pages,
     _master_first_page,
     _order_numbers_descending,
     _refresh_active_fulltext,
@@ -57,6 +60,13 @@ class MockLoginSession:
 def test_phprunner_parser_maps_synthetic_headers_cells_keys_and_notes():
     parsed = parse_phprunner_list(FIXTURE.read_text())
     assert parsed.row_keys == ["700001", "700002"]
+    assert all(isinstance(column, str) for column in parsed.columns)
+    assert all(key is None or isinstance(key, str) for key in parsed.row_keys)
+    assert all(
+        isinstance(label, str) and isinstance(value, str)
+        for row in parsed.rows
+        for label, value in row.items()
+    )
     assert "Order #" in parsed.columns
     assert "Price" in parsed.columns
     first = parsed.rows[0]
@@ -80,6 +90,31 @@ def test_phprunner_parser_maps_synthetic_headers_cells_keys_and_notes():
     assert not mapped["notes_text"].endswith("More")
     assert not mapped["log_text"].endswith("More")
     assert strip_more_suffix("Synthetic update More ...") == "Synthetic update"
+
+
+def test_parser_strips_unselected_option_tags_without_changing_cell_text():
+    html = """
+    <table class="rnr-gridtable">
+      <tr class="rnr-toprow"><th>Order #</th><th>Callback</th></tr>
+      <tr class="rnr-row">
+        <td>700001</td>
+        <td><select><option value="a">First</option><option value="b">Second</option><option value="c">Third</option><option SELECTED value="d">Selected</option></select></td>
+      </tr>
+      <tr class="rnr-row">
+        <td>700002</td>
+        <td><select><option value="x">Only old option</option><option value="y">Second old option</option></select></td>
+      </tr>
+    </table>
+    """
+    expected = [
+        {"Order #": "700001", "Callback": "First Second Third Selected"},
+        {"Order #": "700002", "Callback": "Only old option Second old option"},
+    ]
+
+    cleaned = strip_unselected_option_markup(html.encode())
+    assert b'<option SELECTED value="d">Selected</option>' in cleaned
+    assert parse_phprunner_list(html).rows == expected
+    assert parse_phprunner_list(html.encode()).rows == expected
 
 
 def test_multistop_addresses_supply_missing_city_state_and_zip():
@@ -423,6 +458,82 @@ def test_master_first_page_uses_detected_sort_link_to_get_newest_first():
     assert _order_numbers_descending(parsed)
 
 
+def test_login_detection_removes_large_option_lists_before_parsing(monkeypatch):
+    from app.integrations.kof import client as kof_client_module
+
+    def unexpected_soup(*_args, **_kwargs):
+        pytest.fail("login detection should not parse the full page")
+
+    monkeypatch.setattr(kof_client_module, "BeautifulSoup", unexpected_soup)
+    options = b"".join(
+        f'<option value="{index}">Choice {index}</option>'.encode()
+        for index in range(1000)
+    )
+    content = (
+        b"<select>"
+        + options
+        + b"</select><INPUT NAME='txt_uname_email'><input name=txt_password>"
+    )
+
+    client = KofClient("synthetic-user", "synthetic-password")
+    assert client._looks_like_login(content)
+    assert not client._looks_like_login(b'<input name="txt_uname_email">')
+
+
+def test_incremental_sync_processes_at_most_ten_master_pages(monkeypatch, db):
+    from app.services import kof_sync
+
+    first_page = ParsedList([], [{} for _ in range(PAGE_SIZE)], [None] * PAGE_SIZE)
+    requested = []
+
+    class Client:
+        def get_list_page(self, _definition, page, *, page_size, extra_params):
+            requested.append((page, page_size))
+            return (
+                f"page-{page}",
+                ParsedList([], [{} for _ in range(page_size)], [None] * page_size),
+            )
+
+    fetched = {definition.key: None for definition in kof_sync.SALES_LISTS}
+    monkeypatch.setattr(
+        kof_sync, "_fetch_small_lists", lambda *_args: ({}, set(), fetched)
+    )
+    monkeypatch.setattr(kof_sync, "_upsert_directory_lists", lambda *_args: None)
+    monkeypatch.setattr(kof_sync, "_save_snapshot", lambda *_args: None)
+    monkeypatch.setattr(kof_sync, "_refresh_stage_membership", lambda *_args: set())
+    monkeypatch.setattr(
+        kof_sync, "_master_first_page", lambda *_args: ({}, "page-1", first_page)
+    )
+    monkeypatch.setattr(kof_sync, "_upsert_master_rows", lambda *_args: (PAGE_SIZE, 1))
+    monkeypatch.setattr(kof_sync, "_refresh_active_fulltext", lambda *_args: None)
+
+    stats = kof_sync.sync_with_client(db, Client(), "incremental")
+
+    assert stats.master_pages == 10
+    assert requested == [(page, 100) for page in range(2, 11)]
+
+
+def test_full_master_page_iteration_stops_on_a_short_page():
+    class Client:
+        def __init__(self):
+            self.requested = []
+
+        def get_list_page(self, _definition, page, *, page_size, extra_params):
+            self.requested.append(page)
+            count = page_size - 1 if page == 3 else page_size
+            return (
+                f"page-{page}",
+                ParsedList([], [{} for _ in range(count)], [None] * count),
+            )
+
+    client = Client()
+    first_page = ParsedList([], [{} for _ in range(PAGE_SIZE)], [None] * PAGE_SIZE)
+    pages = list(_iter_master_pages(client, {}, "page-1", first_page, full=True))
+
+    assert [page for page, _, _ in pages] == [1, 2, 3]
+    assert client.requested == [2, 3]
+
+
 def test_kof_client_logs_into_root_before_reposting_module_hidden_values():
     login_form = (
         b'<form action="Lindex.php"><input name="csrf" value="root">'
@@ -522,6 +633,39 @@ def test_kof_client_accepts_empty_phprunner_list():
     )
     assert parsed.columns == []
     assert parsed.rows == []
+
+
+def test_stage_membership_bulk_updates_across_batches(monkeypatch, db):
+    from app.services import kof_sync
+
+    order_numbers = (710001, 710002, 710003, 710004)
+    for order_no in order_numbers:
+        _seed_kof_load(
+            db,
+            order_no=order_no,
+            date_of_sale=date.today(),
+            customer="Synthetic Customer",
+            carrier="Synthetic Carrier",
+            stage="booked",
+            price=Decimal("100.00"),
+            cost=Decimal("75.00"),
+            profit=Decimal("25.00"),
+        )
+    db.commit()
+    unchanged_synced_at = db.get(KofLoad, 710004).synced_at
+    monkeypatch.setattr(kof_sync, "_STAGE_MEMBERSHIP_BATCH_SIZE", 2)
+
+    changed = kof_sync._refresh_stage_membership(
+        db,
+        membership={"710001": "in_transit"},
+        deleted={710003},
+        now=datetime.now(timezone.utc),
+    )
+
+    assert changed == {710001, 710003}
+    assert db.get(KofLoad, 710001).stage == "in_transit"
+    assert db.get(KofLoad, 710003).is_deleted is True
+    assert db.get(KofLoad, 710004).synced_at == unchanged_synced_at
 
 
 def test_kof_load_upsert_is_idempotent(db):

@@ -17,6 +17,11 @@ from app.integrations.kof.parser import (
 )
 
 USER_AGENT = "FifthWheelSync/1.0 (authorized read-only data synchronization)"
+_LOGIN_INPUT_TAG = re.compile(rb"<input\b[^>]*>", re.IGNORECASE)
+_LOGIN_INPUT_NAME = re.compile(
+    rb"\sname\s*=\s*(['\"]?)(txt_uname_email|txt_password)\1(?=[\s/>])",
+    re.IGNORECASE,
+)
 
 
 class KofSiteError(RuntimeError):
@@ -150,11 +155,14 @@ class KofClient:
         self._home_response = home
 
     def _looks_like_login(self, content: bytes) -> bool:
-        soup = BeautifulSoup(content, "lxml")
-        return bool(
-            soup.find("input", attrs={"name": "txt_uname_email"})
-            and soup.find("input", attrs={"name": "txt_password"})
-        )
+        fields = set()
+        for input_tag in _LOGIN_INPUT_TAG.finditer(content):
+            match = _LOGIN_INPUT_NAME.search(input_tag.group())
+            if match:
+                fields.add(match.group(2).lower())
+                if len(fields) == 2:
+                    return True
+        return False
 
     def login_module(self, module: str) -> None:
         if module in self._authenticated_modules:

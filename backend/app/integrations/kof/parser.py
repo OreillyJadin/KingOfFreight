@@ -28,10 +28,47 @@ _DATE_FORMATS = (
 )
 _TIME_FORMATS = ("%I:%M:%S %p", "%I:%M %p", "%H:%M:%S", "%H:%M", "%I %p")
 _MORE_SUFFIX = re.compile(r"(?:\s*More(?:\s*(?:\.{1,3}|…))?)+\s*$", re.IGNORECASE)
+_UNSELECTED_OPTION_OPEN = r"<option\b(?![^>]*\sselected(?:\s|=|/?>))[^>]*>"
+_UNSELECTED_OPTION_TEXT = re.compile(
+    _UNSELECTED_OPTION_OPEN + r"(.*?)</option\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_UNSELECTED_OPTION_BYTES = re.compile(
+    _UNSELECTED_OPTION_OPEN.encode("ascii") + rb"(.*?)</option\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_UNSELECTED_OPTION_RUN_TEXT = re.compile(
+    rf"(?:{_UNSELECTED_OPTION_OPEN}.*?</option\s*>\s*)+",
+    re.IGNORECASE | re.DOTALL,
+)
+_UNSELECTED_OPTION_RUN_BYTES = re.compile(
+    rb"(?:<option\b(?![^>]*\sselected(?:\s|=|/?>))[^>]*>.*?</option\s*>\s*)+",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def _normalize_space(value: str) -> str:
     return " ".join(value.replace("\xa0", " ").split())
+
+
+def _collapse_unselected_options_text(match: re.Match[str]) -> str:
+    return " ".join(
+        option.group(1) for option in _UNSELECTED_OPTION_TEXT.finditer(match.group())
+    )
+
+
+def _collapse_unselected_options_bytes(match: re.Match[bytes]) -> bytes:
+    return b" ".join(
+        option.group(1) for option in _UNSELECTED_OPTION_BYTES.finditer(match.group())
+    )
+
+
+def strip_unselected_option_markup(html: str | bytes) -> str | bytes:
+    if isinstance(html, bytes):
+        return _UNSELECTED_OPTION_RUN_BYTES.sub(
+            _collapse_unselected_options_bytes, html
+        )
+    return _UNSELECTED_OPTION_RUN_TEXT.sub(_collapse_unselected_options_text, html)
 
 
 def strip_more_suffix(value: str | None) -> str | None:
@@ -89,56 +126,63 @@ def _table_score(table: Tag) -> tuple[int, int, int, int, int]:
 
 
 def parse_phprunner_list(html: str | bytes) -> ParsedList:
-    soup = BeautifulSoup(html, "lxml")
-    tables = soup.find_all("table")
-    table = max(tables, key=_table_score, default=None)
-    if table is None:
-        return ParsedList([], [], [])
-    header_row = table.select_one("tr.rnr-toprow")
-    if header_row is None:
-        header_row = next(
-            (row for row in table.find_all("tr") if row.find("th", recursive=False)),
-            None,
-        )
-    if header_row is None:
-        return ParsedList([], [], [])
+    soup = BeautifulSoup(strip_unselected_option_markup(html), "lxml")
+    try:
+        tables = soup.find_all("table")
+        table = max(tables, key=_table_score, default=None)
+        if table is None:
+            return ParsedList([], [], [])
+        header_row = table.select_one("tr.rnr-toprow")
+        if header_row is None:
+            header_row = next(
+                (
+                    row
+                    for row in table.find_all("tr")
+                    if row.find("th", recursive=False)
+                ),
+                None,
+            )
+        if header_row is None:
+            return ParsedList([], [], [])
 
-    header_cells = header_row.find_all(["th", "td"], recursive=False)
-    headers: list[str | None] = []
-    seen: dict[str, int] = {}
-    for cell in header_cells:
-        label = _normalize_space(cell.get_text(" ", strip=True))
-        if not label:
-            headers.append(None)
-            continue
-        seen[label] = seen.get(label, 0) + 1
-        headers.append(label if seen[label] == 1 else f"{label} ({seen[label]})")
+        header_cells = header_row.find_all(["th", "td"], recursive=False)
+        headers: list[str | None] = []
+        seen: dict[str, int] = {}
+        for cell in header_cells:
+            label = _normalize_space(cell.get_text(" ", strip=True))
+            if not label:
+                headers.append(None)
+                continue
+            seen[label] = seen.get(label, 0) + 1
+            headers.append(label if seen[label] == 1 else f"{label} ({seen[label]})")
 
-    columns = [header for header in headers if header]
-    rows: list[dict[str, str]] = []
-    row_keys: list[str | None] = []
-    for row in table.find_all("tr"):
-        if row is header_row:
-            continue
-        key = _row_key(row)
-        if key is None and "rnr-row" not in row.get("class", []):
-            continue
-        cells = row.find_all(["td", "th"], recursive=False)
-        if not cells:
-            continue
-        if len(cells) != len(headers):
-            if len(cells) > len(headers):
-                cells = cells[-len(headers) :]
-            else:
-                cells = [None] * (len(headers) - len(cells)) + cells
-        parsed = {
-            header: _cell_text(cell) if cell is not None else ""
-            for header, cell in zip(headers, cells, strict=False)
-            if header
-        }
-        rows.append(parsed)
-        row_keys.append(key)
-    return ParsedList(columns, rows, row_keys)
+        columns = [header for header in headers if header]
+        rows: list[dict[str, str]] = []
+        row_keys: list[str | None] = []
+        for row in table.find_all("tr"):
+            if row is header_row:
+                continue
+            key = _row_key(row)
+            if key is None and "rnr-row" not in row.get("class", []):
+                continue
+            cells = row.find_all(["td", "th"], recursive=False)
+            if not cells:
+                continue
+            if len(cells) != len(headers):
+                if len(cells) > len(headers):
+                    cells = cells[-len(headers) :]
+                else:
+                    cells = [None] * (len(headers) - len(cells)) + cells
+            parsed = {
+                header: _cell_text(cell) if cell is not None else ""
+                for header, cell in zip(headers, cells, strict=False)
+                if header
+            }
+            rows.append(parsed)
+            row_keys.append(key)
+        return ParsedList(columns, rows, row_keys)
+    finally:
+        soup.decompose()
 
 
 def parse_money(value: str | None) -> Decimal | None:
