@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -48,6 +48,7 @@ from app.services.kof_credentials import get_kof_credentials
 
 PAGE_SIZE = 100
 MAX_PAGES = 200
+_STAGE_MEMBERSHIP_BATCH_SIZE = 500
 MAX_FULLTEXT_LOADS_PER_SYNC = 60
 FULLTEXT_STAGES = ("confirmation", "awaiting_pickup", "in_transit", "awaiting_delivery")
 _SYNC_LOCK = threading.Lock()
@@ -228,19 +229,56 @@ def _refresh_stage_membership(
     db: Session, membership: dict[str, str], deleted: set[int], now: datetime
 ) -> set[int]:
     changed: set[int] = set()
-    for load in db.scalars(select(KofLoad)):
-        stage = membership.get(str(load.order_no)) or derive_stage(
-            load.raw,
-            billed_status=load.billed_status,
-            paid_status=load.paid_status,
-            invoice_no=load.invoice_no,
+    db.flush()
+    last_order_no = None
+    while True:
+        statement = (
+            select(
+                KofLoad.order_no,
+                KofLoad.raw,
+                KofLoad.billed_status,
+                KofLoad.paid_status,
+                KofLoad.invoice_no,
+                KofLoad.stage,
+                KofLoad.is_deleted,
+            )
+            .order_by(KofLoad.order_no)
+            .limit(_STAGE_MEMBERSHIP_BATCH_SIZE)
         )
-        is_deleted = load.order_no in deleted
-        if load.stage != stage or load.is_deleted != is_deleted:
-            changed.add(load.order_no)
-            load.stage = stage
-            load.is_deleted = is_deleted
-            load.synced_at = now
+        if last_order_no is not None:
+            statement = statement.where(KofLoad.order_no > last_order_no)
+        rows = db.execute(statement).all()
+        if not rows:
+            break
+
+        updates = []
+        for row in rows:
+            stage = membership.get(str(row.order_no)) or derive_stage(
+                row.raw,
+                billed_status=row.billed_status,
+                paid_status=row.paid_status,
+                invoice_no=row.invoice_no,
+            )
+            is_deleted = row.order_no in deleted
+            if row.stage != stage or row.is_deleted != is_deleted:
+                changed.add(row.order_no)
+                updates.append(
+                    {
+                        "order_no": row.order_no,
+                        "stage": stage,
+                        "is_deleted": is_deleted,
+                        "synced_at": now,
+                    }
+                )
+        if updates:
+            db.execute(update(KofLoad), updates)
+        last_order_no = rows[-1].order_no
+        if len(rows) < _STAGE_MEMBERSHIP_BATCH_SIZE:
+            break
+
+    for load in db.identity_map.values():
+        if isinstance(load, KofLoad) and load.order_no in changed:
+            db.expire(load, ["stage", "is_deleted", "synced_at"])
     return changed
 
 

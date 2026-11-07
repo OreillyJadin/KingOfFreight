@@ -28,10 +28,47 @@ _DATE_FORMATS = (
 )
 _TIME_FORMATS = ("%I:%M:%S %p", "%I:%M %p", "%H:%M:%S", "%H:%M", "%I %p")
 _MORE_SUFFIX = re.compile(r"(?:\s*More(?:\s*(?:\.{1,3}|…))?)+\s*$", re.IGNORECASE)
+_UNSELECTED_OPTION_OPEN = r"<option\b(?![^>]*\sselected(?:\s|=|/?>))[^>]*>"
+_UNSELECTED_OPTION_TEXT = re.compile(
+    _UNSELECTED_OPTION_OPEN + r"(.*?)</option\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_UNSELECTED_OPTION_BYTES = re.compile(
+    _UNSELECTED_OPTION_OPEN.encode("ascii") + rb"(.*?)</option\s*>",
+    re.IGNORECASE | re.DOTALL,
+)
+_UNSELECTED_OPTION_RUN_TEXT = re.compile(
+    rf"(?:{_UNSELECTED_OPTION_OPEN}.*?</option\s*>\s*)+",
+    re.IGNORECASE | re.DOTALL,
+)
+_UNSELECTED_OPTION_RUN_BYTES = re.compile(
+    rb"(?:<option\b(?![^>]*\sselected(?:\s|=|/?>))[^>]*>.*?</option\s*>\s*)+",
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 def _normalize_space(value: str) -> str:
     return " ".join(value.replace("\xa0", " ").split())
+
+
+def _collapse_unselected_options_text(match: re.Match[str]) -> str:
+    return " ".join(
+        option.group(1) for option in _UNSELECTED_OPTION_TEXT.finditer(match.group())
+    )
+
+
+def _collapse_unselected_options_bytes(match: re.Match[bytes]) -> bytes:
+    return b" ".join(
+        option.group(1) for option in _UNSELECTED_OPTION_BYTES.finditer(match.group())
+    )
+
+
+def strip_unselected_option_markup(html: str | bytes) -> str | bytes:
+    if isinstance(html, bytes):
+        return _UNSELECTED_OPTION_RUN_BYTES.sub(
+            _collapse_unselected_options_bytes, html
+        )
+    return _UNSELECTED_OPTION_RUN_TEXT.sub(_collapse_unselected_options_text, html)
 
 
 def strip_more_suffix(value: str | None) -> str | None:
@@ -89,7 +126,7 @@ def _table_score(table: Tag) -> tuple[int, int, int, int, int]:
 
 
 def parse_phprunner_list(html: str | bytes) -> ParsedList:
-    soup = BeautifulSoup(html, "lxml")
+    soup = BeautifulSoup(strip_unselected_option_markup(html), "lxml")
     try:
         tables = soup.find_all("table")
         table = max(tables, key=_table_score, default=None)
