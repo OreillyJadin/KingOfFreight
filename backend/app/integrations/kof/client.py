@@ -253,7 +253,11 @@ class KofClient:
         text = payload.get("textCont")
         if not isinstance(text, str):
             return None
-        text = unescape(text)
+        for _ in range(3):
+            decoded_text = unescape(text)
+            if decoded_text == text:
+                break
+            text = decoded_text
         text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
         lines = []
         for line in text.replace("\t", "").splitlines():

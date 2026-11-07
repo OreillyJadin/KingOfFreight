@@ -111,6 +111,17 @@ def test_fulltext_client_uses_read_only_get_and_strips_more_suffix():
         "11/06/2026 02:49:39 pm Demo User - Earlier & synthetic note\n"
         "2026-11-07 10:15:00 Dispatcher B - Newer synthetic note"
     )
+    double_escaped_client = FulltextClient(
+        b'{"success":true,"textCont":"2026-11-07 10:15:00 Demo Agent - Synthetic note'
+        b"&amp;lt;br&amp;gt; by: Demo Agent&amp;lt;br&amp;gt; Rep Assigned is "
+        b'Demo Agent&amp;lt;br&amp;gt;---------&amp;lt;br&amp;gt;"}'
+    )
+    assert double_escaped_client.get_fulltext(700001, "Notes") == (
+        "2026-11-07 10:15:00 Demo Agent - Synthetic note\n"
+        " by: Demo Agent\n"
+        " Rep Assigned is Demo Agent"
+    )
+    double_escaped_client.close()
     assert client.get_fulltext(700001, "log") == fulltext
     wrapped_client = FulltextClient(
         b"<html><body><p>" + FULLTEXT_FIXTURE.read_bytes() + b"</p></body></html>"
