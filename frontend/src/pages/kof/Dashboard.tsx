@@ -266,6 +266,8 @@ export default function Dashboard() {
                 { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
                 { key: "cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
                 { key: "price", header: "Avg freight cost", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
+                { key: "profit", header: "Total profit", align: "right", render: (row) => <MoneyCell value={row.total_profit} /> },
+                { key: "avg_profit", header: "Avg profit", align: "right", render: (row) => <MoneyCell value={row.avg_profit} /> },
                 { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
               ]}
             />

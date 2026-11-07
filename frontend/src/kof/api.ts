@@ -126,6 +126,7 @@ export type KofLane = {
   avg_price: number | null;
   avg_cost: number | null;
   avg_profit: number | null;
+  total_profit: number | null;
   margin_pct: number | null;
   min_cost: number | null;
   max_cost: number | null;

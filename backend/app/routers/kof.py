@@ -587,6 +587,7 @@ def _lane_metrics(
             _margin_expression(),
             func.min(KofLoad.cost),
             func.max(KofLoad.cost),
+            func.sum(KofLoad.profit),
         )
         .where(*lane_filters)
         .group_by(origin, destination)
@@ -629,6 +630,7 @@ def _lane_metrics(
             "avg_price": _number(row[3]),
             "avg_cost": _number(row[4]),
             "avg_profit": _number(row[5]),
+            "total_profit": _number(row[9]),
             "margin_pct": _number(row[6]),
             "min_cost": _number(row[7]),
             "max_cost": _number(row[8]),

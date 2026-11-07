@@ -1053,6 +1053,7 @@ def test_kof_api_contract_shapes(client, db, monkeypatch):
         "avg_price",
         "avg_cost",
         "avg_profit",
+        "total_profit",
         "margin_pct",
         "min_cost",
         "max_cost",
@@ -1578,11 +1579,13 @@ def test_lanes_filter_by_branch_customer_and_exact_origin_city(client, db):
 
 
 def test_lanes_and_carrier_top_lanes_exclude_unknown_states(client, db):
-    for order_no, origin_state, dest_state in (
+    fixture_lanes = (
         (700901, "IL", "IA"),
         (700902, None, "IA"),
         (700903, "OH", "Unknown"),
-    ):
+        (700904, "IL", "IA"),
+    )
+    for order_no, origin_state, dest_state in fixture_lanes:
         _seed_kof_load(
             db,
             order_no=order_no,
@@ -1600,9 +1603,15 @@ def test_lanes_and_carrier_top_lanes_exclude_unknown_states(client, db):
     db.flush()
     lanes = client.get("/api/kof/lanes?level=state&min_loads=1")
     assert lanes.status_code == 200
+    lane = lanes.json()[0]
     assert [(lane["origin"], lane["destination"]) for lane in lanes.json()] == [
         ("IL", "IA")
     ]
+    assert lane["total_profit"] == sum(
+        25
+        for _, origin, destination in fixture_lanes
+        if (origin, destination) == ("IL", "IA")
+    )
 
     carriers = client.get("/api/kof/carriers")
     assert carriers.status_code == 200
