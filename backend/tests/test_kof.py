@@ -289,6 +289,33 @@ def test_late_uses_facility_local_appointments_and_unreached_status():
     assert not _is_late(load, now)
 
 
+def test_load_row_reports_when_raw_appointment_time_is_known():
+    from app.routers.kof import _load_row
+
+    now = datetime(2025, 3, 1, 12, tzinfo=timezone.utc)
+    known = KofLoad(
+        order_no=700203,
+        stage="awaiting_pickup",
+        pick_at=datetime(2025, 3, 2),
+        pick_status="Not picked up",
+        pick_tz="America/Chicago",
+        raw={"Pick Time": "3:00:00 PM"},
+    )
+    unknown = KofLoad(
+        order_no=700204,
+        stage="awaiting_pickup",
+        pick_at=datetime(2025, 3, 2),
+        pick_status="Not picked up",
+        pick_tz="America/Chicago",
+        raw={},
+    )
+
+    assert _load_row(known, now)["pick_time_known"] is True
+    unknown_row = _load_row(unknown, now)
+    assert unknown_row["pick_time_known"] is False
+    assert unknown_row["pick_at"] == "2025-03-02T00:00:00"
+
+
 def test_date_only_appointment_is_late_after_local_day_with_broker_timezone_fallback(
     monkeypatch,
 ):
@@ -1071,8 +1098,10 @@ def test_kof_api_contract_shapes(client, db, monkeypatch):
         "dest_city",
         "dest_state",
         "pick_at",
+        "pick_time_known",
         "pick_tz",
         "delivery_at",
+        "delivery_time_known",
         "drop_tz",
         "equipment",
         "weight",

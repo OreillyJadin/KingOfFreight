@@ -6,7 +6,13 @@ import { kof, type KofTrackingLoad } from "../../kof/api";
 import { EmptyState, ErrorState, PageHeading } from "../../components/common";
 import { Badge, Button, Card, CardListSkeleton } from "../../components/ui";
 import { KofConnectionEmptyState } from "../../kof/components";
-import { money, place, relativeHours, shortDate, stageClass } from "../../kof/format";
+import {
+  appointment,
+  money,
+  place,
+  relativeHours,
+  stageClass,
+} from "../../kof/format";
 
 function LoadCard({ load }: { load: KofTrackingLoad }) {
   return (
@@ -32,13 +38,17 @@ function LoadCard({ load }: { load: KofTrackingLoad }) {
         {place(load.origin_city, load.origin_state)} → {place(load.dest_city, load.dest_state)}
       </p>
       <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-xs text-muted">
-        <div>
+        <div className="min-w-0">
           <dt className="inline">Pick </dt>
-          <dd className="inline text-fg-2">{shortDate(load.pick_at)}</dd>
+          <dd className="inline break-words text-fg-2">
+            {appointment(load.pick_at, load.pick_time_known, load.pick_tz)}
+          </dd>
         </div>
-        <div>
+        <div className="min-w-0">
           <dt className="inline">Drop </dt>
-          <dd className="inline text-fg-2">{shortDate(load.delivery_at)}</dd>
+          <dd className="inline break-words text-fg-2">
+            {appointment(load.delivery_at, load.delivery_time_known, load.drop_tz)}
+          </dd>
         </div>
         <div>
           <dt className="inline">Carrier </dt>

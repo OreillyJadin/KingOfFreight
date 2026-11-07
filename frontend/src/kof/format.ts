@@ -75,6 +75,34 @@ export function shortDate(value?: string | null) {
   return date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
+export function appointment(value?: string | null, timeKnown = false, tz?: string | null) {
+  if (!value) return "—";
+  const date = new Date(value.length <= 10 ? `${value}T00:00:00` : value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  const dateOptions: Intl.DateTimeFormatOptions = { month: "short", day: "numeric" };
+  if (date.getFullYear() !== new Date().getFullYear()) dateOptions.year = "numeric";
+  let formatted = date.toLocaleDateString(undefined, dateOptions);
+  if (timeKnown) {
+    formatted += `, ${date.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" })}`;
+  }
+  if (tz) {
+    let zone: string | undefined;
+    try {
+      zone = new Intl.DateTimeFormat("en-US", {
+        timeZone: tz,
+        timeZoneName: "short",
+      })
+        .formatToParts(date)
+        .find((part) => part.type === "timeZoneName")?.value;
+    } catch {
+      zone = undefined;
+    }
+    if (zone) formatted += ` ${zone}`;
+  }
+  return formatted;
+}
+
 export function monthDay(value?: string | null) {
   if (!value) return "—";
   const date = new Date(value.length <= 10 ? `${value}T00:00:00` : value);
