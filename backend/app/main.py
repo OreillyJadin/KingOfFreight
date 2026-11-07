@@ -1,3 +1,4 @@
+import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,6 +20,7 @@ from app.routers.kof import router as kof_router
 from app.services.checkins import run_checkin_tick
 
 settings = get_settings()
+logger = logging.getLogger(__name__)
 scheduler = BackgroundScheduler(timezone="UTC")
 FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
@@ -39,6 +41,16 @@ def _poll_inbox() -> None:
 async def lifespan(_: FastAPI):
     with SessionLocal() as db:
         ensure_bootstrap_user(db, settings.bootstrap_username)
+    try:
+        from app.services.kof_sync import fail_interrupted_sync_runs
+
+        with SessionLocal() as db:
+            fail_interrupted_sync_runs(db)
+    except Exception:
+        logger.warning(
+            "Failed to clean interrupted KOF sync runs during startup",
+            exc_info=True,
+        )
     if settings.scheduler_enabled:
         scheduler.add_job(
             _run_tick,

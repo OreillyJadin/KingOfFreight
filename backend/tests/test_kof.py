@@ -1765,3 +1765,85 @@ def test_scheduled_sync_skips_missing_credentials_and_uses_app_credentials(
     kof_sync.run_scheduled_kof_sync()
     assert len(started) == 2
     get_settings.cache_clear()
+
+
+def test_fail_interrupted_sync_runs_marks_only_running_rows(db):
+    from app.services.kof_sync import fail_interrupted_sync_runs
+
+    now = datetime.now(timezone.utc)
+    interrupted = KofSyncRun(
+        kind="full",
+        status="running",
+        started_at=now - timedelta(minutes=10),
+    )
+    successful = KofSyncRun(
+        kind="full",
+        status="ok",
+        started_at=now - timedelta(hours=1),
+        finished_at=now - timedelta(minutes=30),
+    )
+    db.add_all([interrupted, successful])
+    db.commit()
+    db.refresh(successful)
+    successful_finished_at = successful.finished_at
+
+    assert fail_interrupted_sync_runs(db) == 1
+
+    db.refresh(interrupted)
+    db.refresh(successful)
+    assert interrupted.status == "error"
+    assert interrupted.finished_at is not None
+    assert interrupted.error == "Interrupted by a server restart"
+    assert successful.status == "ok"
+    assert successful.finished_at == successful_finished_at
+    assert successful.error is None
+
+
+def test_start_sync_after_interrupted_run_cleanup(monkeypatch, db):
+    from app.config import get_settings
+    from app.models import KofConnection
+    from app.services import kof_sync
+    from app.services.kof_credentials import encrypt_kof_password
+
+    monkeypatch.delenv("KOF_USERNAME", raising=False)
+    monkeypatch.delenv("KOF_PASSWORD", raising=False)
+    monkeypatch.setenv("KOF_SYNC_ENABLED", "false")
+    get_settings.cache_clear()
+
+    interrupted = KofSyncRun(kind="full", status="running")
+    db.add_all(
+        [
+            KofConnection(
+                id=1,
+                username="database-user",
+                password_encrypted=encrypt_kof_password("database-password"),
+            ),
+            interrupted,
+        ]
+    )
+    db.commit()
+    assert kof_sync.fail_interrupted_sync_runs(db) == 1
+
+    started = []
+
+    class StubThread:
+        def __init__(self, target, args, **kwargs):
+            self.args = args
+
+        def start(self):
+            started.append(self.args)
+            kof_sync._SYNC_LOCK.release()
+
+    monkeypatch.setattr(kof_sync, "threading", SimpleNamespace(Thread=StubThread))
+    try:
+        run_id = kof_sync.start_sync("full")
+
+        assert run_id is not None
+        assert started == [(run_id, "full", None)]
+        db.expire_all()
+        assert db.get(KofSyncRun, interrupted.id).status == "error"
+        assert db.get(KofSyncRun, run_id).status == "running"
+    finally:
+        if kof_sync._SYNC_LOCK.locked():
+            kof_sync._SYNC_LOCK.release()
+        get_settings.cache_clear()
