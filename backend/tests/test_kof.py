@@ -22,6 +22,7 @@ from app.integrations.kof.parser import (
     strip_more_suffix,
 )
 from app.models import KofListSnapshot, KofLoad, KofSyncRun
+from app.routers.kof import _parse_note_entries
 from app.services.kof_sync import (
     SyncStats,
     _master_first_page,
@@ -33,7 +34,7 @@ from app.services.kof_sync import (
 FIXTURE = Path(__file__).parent / "fixtures" / "kof_master_synthetic.html"
 STAGE_FIXTURE = Path(__file__).parent / "fixtures" / "kof_stage_synthetic.html"
 MULTISTOP_FIXTURE = Path(__file__).parent / "fixtures" / "kof_multistop_synthetic.html"
-FULLTEXT_FIXTURE = Path(__file__).parent / "fixtures" / "kof_fulltext_synthetic.html"
+FULLTEXT_FIXTURE = Path(__file__).parent / "fixtures" / "kof_fulltext_synthetic.json"
 
 
 def test_phprunner_parser_maps_synthetic_headers_cells_keys_and_notes():
@@ -88,9 +89,10 @@ def test_multistop_addresses_supply_missing_city_state_and_zip():
 
 def test_fulltext_client_uses_read_only_get_and_strips_more_suffix():
     class FulltextClient(KofClient):
-        def __init__(self):
+        def __init__(self, content: bytes | None = None):
             super().__init__("synthetic-user", "synthetic-password")
             self.calls = []
+            self.content = content or FULLTEXT_FIXTURE.read_bytes()
 
         def login_module(self, module):
             assert module == "my_dispatch"
@@ -100,25 +102,44 @@ def test_fulltext_client_uses_read_only_get_and_strips_more_suffix():
             response = Response()
             response.status_code = 200
             response.url = url
-            response._content = FULLTEXT_FIXTURE.read_bytes()
+            response._content = self.content
             return response
 
     client = FulltextClient()
-    assert client.get_fulltext(700001, "Notes") == (
-        "03/05/2025 02:49:39 pm Demo User - Synthetic complete note"
+    fulltext = client.get_fulltext(700001, "Notes")
+    assert fulltext == (
+        "11/06/2026 02:49:39 pm Demo User - Earlier & synthetic note\n"
+        "2026-11-07 10:15:00 Dispatcher B - Newer synthetic note"
     )
-    assert client.get_fulltext(700001, "log") == (
-        "03/05/2025 02:49:39 pm Demo User - Synthetic complete note"
+    assert client.get_fulltext(700001, "log") == fulltext
+    wrapped_client = FulltextClient(
+        b"<html><body><p>" + FULLTEXT_FIXTURE.read_bytes() + b"</p></body></html>"
     )
+    assert wrapped_client.get_fulltext(700001, "Notes") == fulltext
+    wrapped_client.close()
     assert all(method == "GET" for method, _, _ in client.calls)
     assert {url for _, url, _ in client.calls} == {
         "https://kingsoffreight.com/my_dispatch/fulltext.php"
     }
     assert [call[2]["params"]["field"] for call in client.calls] == ["Notes", "log"]
     assert all(call[2]["params"]["key1"] == "700001" for call in client.calls)
+    entries = _parse_note_entries(fulltext)
+    assert [entry["at"] for entry in entries] == [
+        "2026-11-07T10:15:00-06:00",
+        "2026-11-06T14:49:39-06:00",
+    ]
+    assert [entry["author"] for entry in entries] == ["Dispatcher B", "Demo User"]
     with pytest.raises(KofSiteError):
         client.get_fulltext(700001, "Billing Notes")
     client.close()
+
+    for content in (
+        b'{"success":false,"textCont":"Synthetic rejected response"}',
+        b"not valid JSON",
+    ):
+        failed_client = FulltextClient(content)
+        assert failed_client.get_fulltext(700001, "Notes") is None
+        failed_client.close()
 
 
 def test_phprunner_parser_reads_stage_rows_without_edit_links():
@@ -504,7 +525,7 @@ def test_sync_fulltext_refresh_is_active_only_and_capped_at_60(db):
             cost=Decimal("75.00"),
             profit=Decimal("25.00"),
         )
-    _seed_kof_load(
+    confirmation_load = _seed_kof_load(
         db,
         order_no=700500,
         date_of_sale=date.today(),
@@ -514,6 +535,14 @@ def test_sync_fulltext_refresh_is_active_only_and_capped_at_60(db):
         price=Decimal("100.00"),
         cost=Decimal("75.00"),
         profit=Decimal("25.00"),
+    )
+    confirmation_load.notes_text = "Synthetic list Notes preview"
+    confirmation_load.log_text = "Synthetic list Log preview"
+    confirmation_load.raw.update(
+        {
+            "Notes": "Synthetic list Notes preview",
+            "log": "Synthetic list Log preview",
+        }
     )
     for order_no, stage in ((700499, "awaiting_pickup"), (700498, "awaiting_delivery")):
         _seed_kof_load(
@@ -574,8 +603,8 @@ def test_sync_fulltext_refresh_is_active_only_and_capped_at_60(db):
     fulltext_load = db.get(KofLoad, 700500)
     assert fulltext_load.notes_text.endswith("Full Notes")
     assert fulltext_load.log_text.endswith("Full log")
-    assert fulltext_load.raw["Notes"] == fulltext_load.notes_text
-    assert fulltext_load.raw["log"] == fulltext_load.log_text
+    assert fulltext_load.raw["Notes"] == "Synthetic list Notes preview"
+    assert fulltext_load.raw["log"] == "Synthetic list Log preview"
     assert "More" not in fulltext_load.notes_text
     assert "More" not in fulltext_load.log_text
     assert (700300, "Notes") not in client.calls
@@ -583,6 +612,42 @@ def test_sync_fulltext_refresh_is_active_only_and_capped_at_60(db):
     assert (700302, "Notes") not in client.calls
     assert (700501, "Notes") not in client.calls
     assert (700502, "Notes") not in client.calls
+
+
+def test_sync_keeps_list_previews_when_fulltext_is_unavailable(db):
+    load = _seed_kof_load(
+        db,
+        order_no=700601,
+        date_of_sale=date.today(),
+        customer="Synthetic Customer",
+        carrier="Synthetic Carrier",
+        stage="in_transit",
+        price=Decimal("100.00"),
+        cost=Decimal("75.00"),
+        profit=Decimal("25.00"),
+    )
+    load.notes_text = "11/06/2026 02:49:39 pm Demo User - Preview Notes"
+    load.log_text = "11/06/2026 02:49:39 pm Demo User - Preview Log"
+    load.raw.update(
+        {
+            "Notes": load.notes_text,
+            "log": load.log_text,
+        }
+    )
+
+    class UnavailableFulltext:
+        def get_fulltext(self, order_no, field):
+            return None
+
+    db.flush()
+    stats = SyncStats()
+    _refresh_active_fulltext(db, UnavailableFulltext(), stats)
+
+    assert load.notes_text == "11/06/2026 02:49:39 pm Demo User - Preview Notes"
+    assert load.log_text == "11/06/2026 02:49:39 pm Demo User - Preview Log"
+    assert stats.fulltext_loads_considered == 1
+    assert stats.fulltext_loads_fetched == 0
+    assert stats.fulltext_fields_fetched == 0
 
 
 def test_kof_api_contract_shapes(client, db, monkeypatch):

@@ -1,4 +1,6 @@
 from collections.abc import Iterator
+from html import unescape
+import json
 from pathlib import Path
 import re
 import time
@@ -217,7 +219,7 @@ class KofClient:
             raise KofSiteError(f"KOF returned a non-list page for {definition.key}")
         return response.text, parsed
 
-    def get_fulltext(self, order_no: int, field: str) -> str:
+    def get_fulltext(self, order_no: int, field: str) -> str | None:
         if order_no <= 0 or field not in {"Notes", "log"}:
             raise KofSiteError("Requested KOF full-text field is not allowed")
         self.login_module("my_dispatch")
@@ -235,12 +237,31 @@ class KofClient:
             raise KofLoginError(
                 "KOF full-text access failed; the module session expired"
             )
-        soup = BeautifulSoup(response.content, "lxml")
-        for element in soup(["script", "style", "noscript"]):
-            element.decompose()
-        body = soup.body or soup
-        text = " ".join(body.get_text(" ", strip=True).split())
-        return strip_more_suffix(text) or ""
+        try:
+            payload = response.json()
+        except ValueError:
+            soup = BeautifulSoup(response.content, "lxml")
+            paragraphs = soup.find_all("p")
+            if len(paragraphs) != 1:
+                return None
+            try:
+                payload = json.loads(paragraphs[0].decode_contents())
+            except ValueError:
+                return None
+        if not isinstance(payload, dict) or payload.get("success") is not True:
+            return None
+        text = payload.get("textCont")
+        if not isinstance(text, str):
+            return None
+        text = unescape(text)
+        text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+        lines = []
+        for line in text.replace("\t", "").splitlines():
+            line = line.rstrip()
+            if not line or re.fullmatch(r"-{5,}", line.strip()):
+                continue
+            lines.append(line)
+        return strip_more_suffix("\n".join(lines)) or ""
 
     def iter_list_pages(
         self,

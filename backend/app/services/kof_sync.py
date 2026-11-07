@@ -310,34 +310,36 @@ def _refresh_active_fulltext(db: Session, client: KofClient, stats: SyncStats) -
         raw = dict(load.raw or {})
         fetched_for_load = False
         for label, attribute in (("Notes", "notes_text"), ("log", "log_text")):
+            matching_labels = {
+                "notes": {"notes", "notescomments"},
+                "log": {"log", "loadlog"},
+            }[label.lower()]
+            preview = next(
+                (
+                    value
+                    for raw_label, value in raw.items()
+                    if _normalized_label(raw_label) in matching_labels
+                ),
+                None,
+            )
             try:
                 text = get_fulltext(load.order_no, label)
             except KofSiteError:
                 stats.fulltext_errors += 1
-                load.raw = raw
+                if preview is not None:
+                    setattr(load, attribute, strip_more_suffix(preview) or "")
                 if fetched_for_load:
                     stats.fulltext_loads_fetched += 1
                 db.commit()
                 return
             if text is None:
+                if preview is not None:
+                    setattr(load, attribute, strip_more_suffix(preview) or "")
                 continue
             cleaned = strip_more_suffix(text) or ""
             setattr(load, attribute, cleaned)
-            matching_labels = {
-                "notes": {"notes", "notescomments"},
-                "log": {"log", "loadlog"},
-            }[label.lower()]
-            matched = False
-            for raw_label in list(raw):
-                if _normalized_label(raw_label) in matching_labels:
-                    raw[raw_label] = cleaned
-                    matched = True
-            if not matched:
-                raw[label] = cleaned
-            load.raw = raw
             stats.fulltext_fields_fetched += 1
             fetched_for_load = True
-        load.raw = raw
         if fetched_for_load:
             stats.fulltext_loads_fetched += 1
     db.commit()
