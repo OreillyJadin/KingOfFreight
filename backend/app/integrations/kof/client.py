@@ -8,7 +8,11 @@ from bs4 import BeautifulSoup
 import requests
 
 from app.integrations.kof.catalog import ListDefinition
-from app.integrations.kof.parser import ParsedList, parse_phprunner_list
+from app.integrations.kof.parser import (
+    ParsedList,
+    parse_phprunner_list,
+    strip_more_suffix,
+)
 
 USER_AGENT = "FifthWheelSync/1.0 (authorized read-only data synchronization)"
 
@@ -213,6 +217,31 @@ class KofClient:
             raise KofSiteError(f"KOF returned a non-list page for {definition.key}")
         return response.text, parsed
 
+    def get_fulltext(self, order_no: int, field: str) -> str:
+        if order_no <= 0 or field not in {"Notes", "log"}:
+            raise KofSiteError("Requested KOF full-text field is not allowed")
+        self.login_module("my_dispatch")
+        response = self._request(
+            "GET",
+            urljoin(self.base_url, "my_dispatch/fulltext.php"),
+            params={
+                "pagetype": "list",
+                "table": "Master_Record_Sheet",
+                "field": field,
+                "key1": str(order_no),
+            },
+        )
+        if self._looks_like_login(response.content):
+            raise KofLoginError(
+                "KOF full-text access failed; the module session expired"
+            )
+        soup = BeautifulSoup(response.content, "lxml")
+        for element in soup(["script", "style", "noscript"]):
+            element.decompose()
+        body = soup.body or soup
+        text = " ".join(body.get_text(" ", strip=True).split())
+        return strip_more_suffix(text) or ""
+
     def iter_list_pages(
         self,
         definition: ListDefinition,
@@ -267,8 +296,14 @@ def load_captured_pages(capture_dir: str | Path, list_key: str) -> list[bytes]:
 
 
 class CapturedKofClient:
-    def __init__(self, capture_dir: str | Path) -> None:
+    def __init__(
+        self,
+        capture_dir: str | Path,
+        *,
+        fulltext_client: KofClient | None = None,
+    ) -> None:
         self.capture_dir = Path(capture_dir)
+        self.fulltext_client = fulltext_client
 
     def __enter__(self) -> "CapturedKofClient":
         return self
@@ -278,6 +313,11 @@ class CapturedKofClient:
 
     def login_module(self, _: str) -> None:
         return None
+
+    def get_fulltext(self, order_no: int, field: str) -> str | None:
+        if self.fulltext_client is None:
+            return None
+        return self.fulltext_client.get_fulltext(order_no, field)
 
     def get_list_page(
         self,

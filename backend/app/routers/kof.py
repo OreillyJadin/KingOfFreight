@@ -21,7 +21,7 @@ from sqlalchemy.orm import Session
 from app.auth import require_broker
 from app.config import get_settings
 from app.db import get_db
-from app.integrations.kof.parser import parse_time
+from app.integrations.kof.parser import parse_time, strip_more_suffix
 from app.models import KofListSnapshot, KofLoad, KofSyncRun
 from app.services.kof_sync import start_sync
 
@@ -31,9 +31,9 @@ router = APIRouter(
     dependencies=[Depends(require_broker)],
 )
 _ACTIVE_STAGES = ("awaiting_pickup", "in_transit", "awaiting_delivery")
-_NOTE_PATTERN = re.compile(
-    r"(?P<at>\d{1,2}/\d{1,2}/\d{2,4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*[ap]\.?m\.?)\s+"
-    r"(?P<author>[^-]{1,100}?)\s*-\s*(?P<text>.*?)(?=(?:\s+\d{1,2}/\d{1,2}/\d{2,4}\s+\d{1,2}:\d{2})|$)",
+_NOTE_TIMESTAMP = re.compile(
+    r"(?P<at>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}|"
+    r"\d{1,2}/\d{1,2}/\d{4}\s+\d{1,2}:\d{2}(?::\d{2})?\s*[ap]\.?m\.?)",
     re.IGNORECASE,
 )
 
@@ -135,16 +135,21 @@ def _appointment_passed(
     *,
     time_known: bool = True,
 ) -> bool:
-    if appointment is None or not tz_name:
+    if appointment is None:
         return False
     try:
-        zone = ZoneInfo(tz_name)
+        zone = ZoneInfo(tz_name or get_settings().broker_timezone)
     except (ZoneInfoNotFoundError, ValueError):
-        return False
+        zone = ZoneInfo(get_settings().broker_timezone)
     if not time_known:
-        appointment = appointment.replace(hour=23, minute=59, second=59)
-    local_appointment = appointment.replace(tzinfo=zone)
-    return local_appointment.astimezone(timezone.utc) < now
+        appointment_day = appointment.date()
+        return now.astimezone(zone).date() > appointment_day
+    local_appointment = (
+        appointment.replace(tzinfo=zone)
+        if appointment.tzinfo is None
+        else appointment.astimezone(zone)
+    )
+    return local_appointment.astimezone(timezone.utc) < now.astimezone(timezone.utc)
 
 
 def _raw_time_known(load: KofLoad, labels: tuple[str, ...]) -> bool:
@@ -225,33 +230,86 @@ def _load_row(load: KofLoad, now: datetime | None = None) -> dict:
     }
 
 
-def _parse_note_entries(text: str | None, *, include_author: bool) -> list[dict]:
+def _parse_note_entries(text: str | None) -> list[dict]:
+    text = strip_more_suffix(text)
     if not text or not text.strip():
         return []
+    matches = list(_NOTE_TIMESTAMP.finditer(text))
+    if not matches:
+        return [{"at": None, "text": text.strip()}]
     entries = []
-    for match in _NOTE_PATTERN.finditer(text):
+    for index, match in enumerate(matches):
+        next_start = (
+            matches[index + 1].start() if index + 1 < len(matches) else len(text)
+        )
+        entry_text = text[match.end() : next_start].strip(" \t\r\n-")
+        author_match = re.match(
+            r"(?P<author>[^\r\n]{1,100}?)\s+-\s+(?P<text>.*)",
+            entry_text,
+            re.DOTALL,
+        )
+        author = author_match.group("author").strip() if author_match else None
+        entry_text = author_match.group("text").strip() if author_match else entry_text
+        entry_text = strip_more_suffix(entry_text) or ""
         try:
-            timestamp = datetime.strptime(
-                re.sub(r"\s+", " ", match.group("at").replace(".", "")),
-                "%m/%d/%Y %I:%M:%S %p"
-                if match.group("at").count(":") == 2
-                else "%m/%d/%Y %I:%M %p",
-            )
+            raw_timestamp = re.sub(
+                r"\s+", " ", match.group("at").replace(".", "")
+            ).strip()
+            if raw_timestamp[4] == "-":
+                timestamp = datetime.strptime(raw_timestamp, "%Y-%m-%d %H:%M:%S")
+            else:
+                timestamp = None
+                for date_format in (
+                    "%m/%d/%Y %I:%M:%S %p",
+                    "%m/%d/%Y %I:%M %p",
+                ):
+                    try:
+                        timestamp = datetime.strptime(raw_timestamp, date_format)
+                        break
+                    except ValueError:
+                        continue
         except ValueError:
             timestamp = None
         entry = {
-            "at": timestamp.isoformat() if timestamp else None,
-            "text": match.group("text").strip(),
+            "at": (
+                timestamp.replace(tzinfo=ZoneInfo("America/Chicago")).isoformat()
+                if timestamp
+                else None
+            ),
+            "text": entry_text,
         }
-        if include_author:
-            entry["author"] = match.group("author").strip()
+        if author:
+            entry["author"] = author
         entries.append(entry)
-    if entries:
-        return entries
-    entry = {"at": None, "text": text.strip()}
-    if include_author:
-        entry["author"] = None
-    return [entry]
+    entries.sort(
+        key=lambda entry: (
+            datetime.fromisoformat(entry["at"]).astimezone(timezone.utc)
+            if entry["at"]
+            else datetime.min.replace(tzinfo=timezone.utc)
+        ),
+        reverse=True,
+    )
+    return entries
+
+
+def _latest_note(notes_text: str | None, log_text: str | None) -> dict | None:
+    entries = _parse_note_entries(notes_text) + _parse_note_entries(log_text)
+    timestamped = [entry for entry in entries if entry["at"]]
+    if timestamped:
+        return max(
+            timestamped,
+            key=lambda entry: datetime.fromisoformat(entry["at"]).astimezone(
+                timezone.utc
+            ),
+        )
+    return entries[0] if entries else None
+
+
+def _hours_since_update(entry: dict | None, now: datetime) -> float | None:
+    if not entry or not entry["at"]:
+        return None
+    updated_at = datetime.fromisoformat(entry["at"]).astimezone(timezone.utc)
+    return round((now.astimezone(timezone.utc) - updated_at).total_seconds() / 3600, 2)
 
 
 def _lane_expressions(level: str):
@@ -283,6 +341,16 @@ def _lane_expressions(level: str):
         else_=func.coalesce(KofLoad.dest_state, "Unknown"),
     )
     return origin, destination
+
+
+def _known_lane_filters() -> list:
+    unknown_states = ("", "unknown", "n/a", "na", "?")
+    return [
+        KofLoad.origin_state.is_not(None),
+        KofLoad.dest_state.is_not(None),
+        func.lower(func.trim(KofLoad.origin_state)).notin_(unknown_states),
+        func.lower(func.trim(KofLoad.dest_state)).notin_(unknown_states),
+    ]
 
 
 def _average_summary(db: Session, filters: list) -> dict:
@@ -471,6 +539,7 @@ def lanes(
     db: Session = Depends(get_db),
 ) -> list[dict]:
     _, _, filters = _date_filters(start, end)
+    filters.extend(_known_lane_filters())
     origin, destination = _lane_expressions(level)
     metrics = db.execute(
         select(
@@ -606,7 +675,7 @@ def carriers(
             destination,
             func.count(KofLoad.order_no).label("loads"),
         )
-        .where(*filters, KofLoad.carrier.is_not(None))
+        .where(*filters, KofLoad.carrier.is_not(None), *_known_lane_filters())
         .group_by(KofLoad.carrier, KofLoad.mc, origin, destination)
         .order_by(KofLoad.carrier, KofLoad.mc, func.count(KofLoad.order_no).desc())
     ).all()
@@ -718,6 +787,8 @@ def loads(
     sort_expression = sort_fields.get(sort_field, KofLoad.date_of_sale)
     if descending:
         sort_expression = sort_expression.desc()
+        if sort_field == "date_of_sale":
+            sort_expression = sort_expression.nulls_last()
     query = base.order_by(sort_expression, KofLoad.order_no.desc())
     records = db.scalars(query.offset((page - 1) * page_size).limit(page_size)).all()
     now = datetime.now(timezone.utc)
@@ -764,8 +835,8 @@ def load_detail(order_no: int, db: Session = Depends(get_db)) -> dict:
                 "dispatch_contact": load.dispatch_contact,
                 "dispatch_phone": load.dispatch_phone,
             },
-            "notes": _parse_note_entries(load.notes_text, include_author=True),
-            "log": _parse_note_entries(load.log_text, include_author=False),
+            "notes": _parse_note_entries(load.notes_text),
+            "log": _parse_note_entries(load.log_text),
             "raw": load.raw or {},
         }
     )
@@ -785,26 +856,8 @@ def tracking(db: Session = Depends(get_db)) -> dict:
     ).all()
     grouped = {stage: [] for stage in _ACTIVE_STAGES}
     for load in rows:
-        notes = _parse_note_entries(load.notes_text, include_author=False)
-        logs = _parse_note_entries(load.log_text, include_author=False)
-        last_note = max(
-            notes + logs,
-            key=lambda entry: entry["at"] or "",
-            default=None,
-        )
-        updated_at = None
-        if last_note and last_note["at"]:
-            try:
-                updated_at = datetime.fromisoformat(last_note["at"]).replace(
-                    tzinfo=timezone.utc
-                )
-            except ValueError:
-                updated_at = None
-        if updated_at is None:
-            updated_at = load.synced_at
-        hours = (
-            round((now - updated_at).total_seconds() / 3600, 2) if updated_at else None
-        )
+        last_note = _latest_note(load.notes_text, load.log_text)
+        hours = _hours_since_update(last_note, now)
         grouped[load.stage].append(
             {
                 **_load_row(load, now),

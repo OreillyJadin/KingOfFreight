@@ -8,6 +8,7 @@ from app.integrations.kof.parser import (
     parse_local_datetime,
     parse_money,
     parse_row_key_or_order,
+    strip_more_suffix,
 )
 
 _TIMEZONES = {
@@ -32,6 +33,11 @@ _TIMEZONES = {
     "MOUNTAIN": "America/Denver",
     "PACIFIC": "America/Los_Angeles",
 }
+_STOP_LOCATION = re.compile(
+    r"\b1st\s+(?:pick|drop)\s*:\s*.+?,\s*(?P<city>[^,]+?)\s*,\s*"
+    r"(?P<state>[A-Z]{2})(?:\s+(?P<zip>\d{5}(?:-\d{4})?))?\b",
+    re.IGNORECASE,
+)
 
 
 def _key(value: str) -> str:
@@ -48,6 +54,19 @@ def _value(values: dict[str, str], *labels: str) -> str | None:
         if value:
             return value
     return None
+
+
+def _stop_location(value: str | None) -> dict[str, str | None]:
+    if not value:
+        return {}
+    match = _STOP_LOCATION.search(value)
+    if match is None:
+        return {}
+    return {
+        "city": match.group("city").strip(),
+        "state": match.group("state").upper(),
+        "zip": match.group("zip"),
+    }
 
 
 def _status_reached(value: str | None) -> bool:
@@ -263,6 +282,18 @@ def map_load_row(
     pick_at = parse_local_datetime(pick_date, pick_time)
     delivery_at = parse_local_datetime(delivery_date, delivery_time)
     raw = {str(label): str(value or "") for label, value in row.items()}
+    shipper_address = _value(values, "Shipping From Address", "Shipper Address")
+    consignee_address = _value(values, "Shipping To Address", "Consignee Address")
+    pickup_location = _stop_location(shipper_address)
+    delivery_location = _stop_location(consignee_address)
+    notes_text = strip_more_suffix(_value(values, "Notes", "Notes / Comments"))
+    log_text = strip_more_suffix(_value(values, "Log", "Load Log"))
+    for label in list(raw):
+        normalized = _key(label)
+        if normalized in {"notes", "notescomments"}:
+            raw[label] = strip_more_suffix(raw[label]) or ""
+        elif normalized in {"log", "loadlog"}:
+            raw[label] = strip_more_suffix(raw[label]) or ""
 
     def checkbox(*labels: str) -> bool | None:
         value = _value(values, *labels)
@@ -277,28 +308,40 @@ def map_load_row(
         "branch": _value(values, "Branch No. / Loc.", "Branch", "Branch Name"),
         "carrier": _value(values, "Trucking Co", "Trucking Company", "Carrier"),
         "mc": _value(values, "MC #", "MC", "MC Number"),
-        "origin_city": _value(values, "Shipping From City", "Origin City"),
-        "origin_state": _value(values, "Shipping From State", "Origin State"),
+        "origin_city": _value(values, "Shipping From City", "Origin City")
+        or pickup_location.get("city"),
+        "origin_state": _value(values, "Shipping From State", "Origin State")
+        or pickup_location.get("state"),
         "origin_zip": _value(
             values, "Shipping From Zip", "Shipping From ZIP", "Origin ZIP"
-        ),
-        "dest_city": _value(values, "Shipping To City", "Destination City"),
-        "dest_state": _value(values, "Shipping To State", "Destination State"),
+        )
+        or pickup_location.get("zip"),
+        "dest_city": _value(values, "Shipping To City", "Destination City")
+        or delivery_location.get("city"),
+        "dest_state": _value(values, "Shipping To State", "Destination State")
+        or delivery_location.get("state"),
         "dest_zip": _value(
             values, "Shipping To Zip", "Shipping To ZIP", "Destination ZIP"
-        ),
+        )
+        or delivery_location.get("zip"),
         "shipper_company": _value(values, "Shipping From Company", "Shipper"),
-        "shipper_address": _value(values, "Shipping From Address", "Shipper Address"),
-        "shipper_city": _value(values, "Shipping From City"),
-        "shipper_state": _value(values, "Shipping From State"),
-        "shipper_zip": _value(values, "Shipping From Zip", "Shipping From ZIP"),
+        "shipper_address": shipper_address,
+        "shipper_city": _value(values, "Shipping From City")
+        or pickup_location.get("city"),
+        "shipper_state": _value(values, "Shipping From State")
+        or pickup_location.get("state"),
+        "shipper_zip": _value(values, "Shipping From Zip", "Shipping From ZIP")
+        or pickup_location.get("zip"),
         "shipper_phone": _value(values, "Shipping From Phone #", "Shipping From Phone"),
         "shipper_email": _value(values, "Shipping From Email"),
         "consignee_company": _value(values, "Shipping To Company", "Consignee"),
-        "consignee_address": _value(values, "Shipping To Address", "Consignee Address"),
-        "consignee_city": _value(values, "Shipping To City"),
-        "consignee_state": _value(values, "Shipping To State"),
-        "consignee_zip": _value(values, "Shipping To Zip", "Shipping To ZIP"),
+        "consignee_address": consignee_address,
+        "consignee_city": _value(values, "Shipping To City")
+        or delivery_location.get("city"),
+        "consignee_state": _value(values, "Shipping To State")
+        or delivery_location.get("state"),
+        "consignee_zip": _value(values, "Shipping To Zip", "Shipping To ZIP")
+        or delivery_location.get("zip"),
         "consignee_phone": _value(values, "Shipping To Phone #", "Shipping To Phone"),
         "consignee_email": _value(values, "Shipping To Email"),
         "pick_at": pick_at,
@@ -324,8 +367,8 @@ def map_load_row(
         "pick_status": _value(values, "Pick Status", "Pickup Status"),
         "delivery_status": _value(values, "Delivery Status", "Delivery"),
         "on_time": checkbox("On Time", "On-Time", "On Time Delivery"),
-        "notes_text": _value(values, "Notes", "Notes / Comments"),
-        "log_text": _value(values, "Log", "Load Log"),
+        "notes_text": notes_text,
+        "log_text": log_text,
         "booker": _value(values, "Booker", "Booked By"),
         "rep": _value(values, "Rep", "Sales Rep"),
         "product_description": _value(

@@ -27,10 +27,17 @@ _DATE_FORMATS = (
     "%m/%d/%y %I:%M %p",
 )
 _TIME_FORMATS = ("%I:%M:%S %p", "%I:%M %p", "%H:%M:%S", "%H:%M", "%I %p")
+_MORE_SUFFIX = re.compile(r"(?:\s*More(?:\s*(?:\.{1,3}|…))?)+\s*$", re.IGNORECASE)
 
 
 def _normalize_space(value: str) -> str:
     return " ".join(value.replace("\xa0", " ").split())
+
+
+def strip_more_suffix(value: str | None) -> str | None:
+    if value is None:
+        return None
+    return _MORE_SUFFIX.sub("", value).strip()
 
 
 def _cell_text(cell: Tag) -> str:

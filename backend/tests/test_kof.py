@@ -1,12 +1,14 @@
 from datetime import date, datetime, time, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from requests import Response
 from sqlalchemy import func, select
 
 from app.integrations.kof.catalog import ListDefinition
-from app.integrations.kof.client import KofClient, KofLoginError
+from app.integrations.kof.client import KofClient, KofLoginError, KofSiteError
 from app.integrations.kof.mapping import derive_stage, map_load_row
 from app.integrations.kof.parser import (
     ParsedList,
@@ -17,17 +19,21 @@ from app.integrations.kof.parser import (
     parse_phprunner_list,
     parse_row_key_or_order,
     parse_time,
+    strip_more_suffix,
 )
 from app.models import KofListSnapshot, KofLoad, KofSyncRun
 from app.services.kof_sync import (
     SyncStats,
     _master_first_page,
     _order_numbers_descending,
+    _refresh_active_fulltext,
     _upsert_master_rows,
 )
 
 FIXTURE = Path(__file__).parent / "fixtures" / "kof_master_synthetic.html"
 STAGE_FIXTURE = Path(__file__).parent / "fixtures" / "kof_stage_synthetic.html"
+MULTISTOP_FIXTURE = Path(__file__).parent / "fixtures" / "kof_multistop_synthetic.html"
+FULLTEXT_FIXTURE = Path(__file__).parent / "fixtures" / "kof_fulltext_synthetic.html"
 
 
 def test_phprunner_parser_maps_synthetic_headers_cells_keys_and_notes():
@@ -39,7 +45,8 @@ def test_phprunner_parser_maps_synthetic_headers_cells_keys_and_notes():
     assert first["Order #"] == "700001"
     assert first["Customer"] == "Northwind Demo Co"
     assert first["Price"] == "$1,050.00"
-    assert "Synthetic complete note" in first["Notes"]
+    assert "Synthetic note preview" in first["Notes"]
+    assert first["Notes"].endswith("More ...")
     assert first["Confirmation Sent"] == "checked"
     assert parsed.rows[1]["Confirmation Sent"] == "unchecked"
 
@@ -52,6 +59,66 @@ def test_phprunner_parser_maps_synthetic_headers_cells_keys_and_notes():
     assert mapped["weight"] == Decimal("44000")
     assert mapped["price"] == Decimal("1050.00")
     assert mapped["confirmation_sent"] is True
+    assert not mapped["notes_text"].endswith("More")
+    assert not mapped["log_text"].endswith("More")
+    assert strip_more_suffix("Synthetic update More ...") == "Synthetic update"
+
+
+def test_multistop_addresses_supply_missing_city_state_and_zip():
+    parsed = parse_phprunner_list(MULTISTOP_FIXTURE.read_text())
+    mapped = map_load_row(parsed.rows[0], parsed.row_keys[0])
+
+    assert mapped is not None
+    assert (mapped["origin_city"], mapped["origin_state"], mapped["origin_zip"]) == (
+        "Wichita",
+        "KS",
+        "67202",
+    )
+    assert (
+        mapped["dest_city"],
+        mapped["dest_state"],
+        mapped["dest_zip"],
+    ) == ("Des Moines", "IA", "50309")
+    assert (mapped["shipper_city"], mapped["shipper_state"], mapped["shipper_zip"]) == (
+        "Wichita",
+        "KS",
+        "67202",
+    )
+
+
+def test_fulltext_client_uses_read_only_get_and_strips_more_suffix():
+    class FulltextClient(KofClient):
+        def __init__(self):
+            super().__init__("synthetic-user", "synthetic-password")
+            self.calls = []
+
+        def login_module(self, module):
+            assert module == "my_dispatch"
+
+        def _request(self, method, url, **kwargs):
+            self.calls.append((method, url, kwargs))
+            response = Response()
+            response.status_code = 200
+            response.url = url
+            response._content = FULLTEXT_FIXTURE.read_bytes()
+            return response
+
+    client = FulltextClient()
+    assert client.get_fulltext(700001, "Notes") == (
+        "03/05/2025 02:49:39 pm Demo User - Synthetic complete note"
+    )
+    assert client.get_fulltext(700001, "log") == (
+        "03/05/2025 02:49:39 pm Demo User - Synthetic complete note"
+    )
+    assert all(method == "GET" for method, _, _ in client.calls)
+    assert {url for _, url, _ in client.calls} == {
+        "https://kingsoffreight.com/my_dispatch/fulltext.php"
+    }
+    assert [call[2]["params"]["field"] for call in client.calls] == ["Notes", "log"]
+    assert all(call[2]["params"]["key1"] == "700001" for call in client.calls)
+    with pytest.raises(KofSiteError):
+        client.get_fulltext(700001, "Billing Notes")
+    client.close()
 
 
 def test_phprunner_parser_reads_stage_rows_without_edit_links():
@@ -136,6 +203,73 @@ def test_late_uses_facility_local_appointments_and_unreached_status():
     load.pick_status = "Not picked up"
     load.raw = {}
     assert not _is_late(load, now)
+
+
+def test_date_only_appointment_is_late_after_local_day_with_broker_timezone_fallback(
+    monkeypatch,
+):
+    from app.routers import kof as kof_router
+
+    monkeypatch.setattr(
+        kof_router,
+        "get_settings",
+        lambda: SimpleNamespace(broker_timezone="America/Chicago"),
+    )
+    load = KofLoad(
+        order_no=700202,
+        stage="in_transit",
+        delivery_at=datetime(2025, 3, 1),
+        drop_tz=None,
+        delivery_status="Not delivered",
+        raw={},
+    )
+
+    from app.routers.kof import _is_late
+
+    assert not _is_late(load, datetime(2025, 3, 1, 18, tzinfo=timezone.utc))
+    assert not _is_late(load, datetime(2025, 3, 2, 5, 59, 59, tzinfo=timezone.utc))
+    assert _is_late(load, datetime(2025, 3, 2, 6, tzinfo=timezone.utc))
+
+    load.drop_tz = "America/Los_Angeles"
+    assert not _is_late(load, datetime(2025, 3, 2, 7, 59, 59, tzinfo=timezone.utc))
+    assert _is_late(load, datetime(2025, 3, 2, 8, tzinfo=timezone.utc))
+
+    load.drop_tz = "invalid/timezone"
+    assert _is_late(load, datetime(2025, 3, 2, 6, tzinfo=timezone.utc))
+
+
+def test_notes_and_logs_parse_timestamp_formats_newest_first_in_chicago():
+    from app.routers.kof import (
+        _hours_since_update,
+        _latest_note,
+        _parse_note_entries,
+    )
+
+    notes = (
+        "11/06/2026 02:49:39 pm Demo User - Older update "
+        "2026-11-07 10:15:00 Dispatcher B - Newest update More ..."
+    )
+    entries = _parse_note_entries(notes)
+    assert [entry["text"] for entry in entries] == [
+        "Newest update",
+        "Older update",
+    ]
+    assert entries[0]["at"] == "2026-11-07T10:15:00-06:00"
+    assert entries[0]["author"] == "Dispatcher B"
+    assert entries[1]["at"] == "2026-11-06T14:49:39-06:00"
+    assert entries[1]["author"] == "Demo User"
+
+    now = datetime(2026, 11, 7, 18, 15, tzinfo=timezone.utc)
+    latest = _latest_note(notes, "2026-11-07 11:00:00 Demo Logger - Log update")
+    assert latest is not None and latest["author"] == "Demo Logger"
+    assert _hours_since_update(latest, now) == 1.25
+    assert _hours_since_update(None, now) is None
+    assert (
+        _hours_since_update(
+            _parse_note_entries("Synthetic un-timestamped note")[0], now
+        )
+        is None
+    )
 
 
 def test_kof_client_does_not_follow_list_redirects():
@@ -301,7 +435,7 @@ def _seed_kof_load(
     db,
     *,
     order_no: int,
-    date_of_sale: date,
+    date_of_sale: date | None,
     customer: str,
     carrier: str,
     stage: str,
@@ -310,7 +444,8 @@ def _seed_kof_load(
     profit: Decimal | None,
     is_deleted: bool = False,
     city: str = "Chicago",
-    state: str = "IL",
+    state: str | None = "IL",
+    dest_state: str | None = "IA",
     equipment: str = "Dry Van",
     on_time: bool | None = True,
 ) -> KofLoad:
@@ -324,7 +459,7 @@ def _seed_kof_load(
         origin_city=city,
         origin_state=state,
         dest_city="Des Moines",
-        dest_state="IA",
+        dest_state=dest_state,
         pick_at=datetime.combine(date.today() - timedelta(days=1), time(8)),
         pick_tz="America/Chicago",
         delivery_at=datetime.combine(date.today() - timedelta(days=1), time(14)),
@@ -354,6 +489,100 @@ def _seed_kof_load(
     )
     db.add(load)
     return load
+
+
+def test_sync_fulltext_refresh_is_active_only_and_capped_at_60(db):
+    for order_no in range(700300, 700360):
+        _seed_kof_load(
+            db,
+            order_no=order_no,
+            date_of_sale=date.today(),
+            customer="Synthetic Customer",
+            carrier="Synthetic Carrier",
+            stage="in_transit",
+            price=Decimal("100.00"),
+            cost=Decimal("75.00"),
+            profit=Decimal("25.00"),
+        )
+    _seed_kof_load(
+        db,
+        order_no=700500,
+        date_of_sale=date.today(),
+        customer="Synthetic Customer",
+        carrier="Synthetic Carrier",
+        stage="confirmation",
+        price=Decimal("100.00"),
+        cost=Decimal("75.00"),
+        profit=Decimal("25.00"),
+    )
+    for order_no, stage in ((700499, "awaiting_pickup"), (700498, "awaiting_delivery")):
+        _seed_kof_load(
+            db,
+            order_no=order_no,
+            date_of_sale=date.today(),
+            customer="Synthetic Customer",
+            carrier="Synthetic Carrier",
+            stage=stage,
+            price=Decimal("100.00"),
+            cost=Decimal("75.00"),
+            profit=Decimal("25.00"),
+        )
+    _seed_kof_load(
+        db,
+        order_no=700501,
+        date_of_sale=date.today(),
+        customer="Synthetic Customer",
+        carrier="Synthetic Carrier",
+        stage="booked",
+        price=Decimal("100.00"),
+        cost=Decimal("75.00"),
+        profit=Decimal("25.00"),
+    )
+    _seed_kof_load(
+        db,
+        order_no=700502,
+        date_of_sale=date.today(),
+        customer="Synthetic Customer",
+        carrier="Synthetic Carrier",
+        stage="in_transit",
+        price=Decimal("100.00"),
+        cost=Decimal("75.00"),
+        profit=Decimal("25.00"),
+        is_deleted=True,
+    )
+
+    class FulltextClient:
+        def __init__(self):
+            self.calls = []
+
+        def get_fulltext(self, order_no, field):
+            self.calls.append((order_no, field))
+            return f"2026-11-07 10:15:00 Demo User - Full {field} More ..."
+
+    client = FulltextClient()
+    stats = SyncStats()
+    db.flush()
+    _refresh_active_fulltext(db, client, stats)
+
+    expected_orders = set(range(700303, 700360)) | {700498, 700499, 700500}
+    assert stats.fulltext_loads_considered == 60
+    assert stats.fulltext_loads_fetched == 60
+    assert stats.fulltext_fields_fetched == 120
+    assert stats.fulltext_errors == 0
+    assert {order_no for order_no, _ in client.calls} == expected_orders
+    assert len(client.calls) == 120
+    fulltext_load = db.get(KofLoad, 700500)
+    assert fulltext_load.notes_text.endswith("Full Notes")
+    assert fulltext_load.log_text.endswith("Full log")
+    assert fulltext_load.raw["Notes"] == fulltext_load.notes_text
+    assert fulltext_load.raw["log"] == fulltext_load.log_text
+    assert "More" not in fulltext_load.notes_text
+    assert "More" not in fulltext_load.log_text
+    assert (700300, "Notes") not in client.calls
+    assert (700301, "Notes") not in client.calls
+    assert (700302, "Notes") not in client.calls
+    assert (700501, "Notes") not in client.calls
+    assert (700502, "Notes") not in client.calls
 
 
 def test_kof_api_contract_shapes(client, db, monkeypatch):
@@ -551,7 +780,9 @@ def test_kof_api_contract_shapes(client, db, monkeypatch):
         "dispatch_phone",
     }
     assert detail_body["notes"][0]["text"] == "Synthetic update"
-    assert set(detail_body["log"][0]) == {"at", "text"}
+    assert detail_body["notes"][0]["author"] == "Demo User"
+    assert detail_body["log"][0]["text"] == "Synthetic log entry"
+    assert detail_body["log"][0]["author"] == "Demo User"
     assert detail_body["raw"] == {"Order #": "700101"}
     assert client.get("/api/kof/loads/999999").status_code == 404
 
@@ -564,6 +795,7 @@ def test_kof_api_contract_shapes(client, db, monkeypatch):
     ]
     active = tracking.json()["stages"][1]["loads"][0]
     assert "last_note" in active and "hours_since_update" in active
+    assert active["last_note"]["text"] == "Synthetic update"
     sales = client.get("/api/kof/sales")
     assert [item["key"] for item in sales.json()["lists"]] == list(keys)
     assert set(sales.json()["lists"][0]) == {
@@ -615,3 +847,64 @@ def test_kof_api_contract_shapes(client, db, monkeypatch):
         monkeypatch.delenv("KOF_PASSWORD")
         get_settings.cache_clear()
     assert client.post("/api/kof/sync?kind=full").status_code == 400
+
+
+def test_loads_sort_descending_places_null_dates_last(client, db):
+    for order_no, sale_date in (
+        (700801, date.today() - timedelta(days=1)),
+        (700802, date.today()),
+        (700803, None),
+    ):
+        _seed_kof_load(
+            db,
+            order_no=order_no,
+            date_of_sale=sale_date,
+            customer="Synthetic Customer",
+            carrier="Synthetic Carrier",
+            stage="booked",
+            price=Decimal("100.00"),
+            cost=Decimal("75.00"),
+            profit=Decimal("25.00"),
+        )
+
+    db.flush()
+    response = client.get("/api/kof/loads?sort=-date_of_sale&page_size=10")
+
+    assert response.status_code == 200
+    assert [item["order_no"] for item in response.json()["items"]] == [
+        700802,
+        700801,
+        700803,
+    ]
+
+
+def test_lanes_and_carrier_top_lanes_exclude_unknown_states(client, db):
+    for order_no, origin_state, dest_state in (
+        (700901, "IL", "IA"),
+        (700902, None, "IA"),
+        (700903, "OH", "Unknown"),
+    ):
+        _seed_kof_load(
+            db,
+            order_no=order_no,
+            date_of_sale=date.today(),
+            customer="Synthetic Customer",
+            carrier="Synthetic Carrier",
+            stage="booked",
+            price=Decimal("100.00"),
+            cost=Decimal("75.00"),
+            profit=Decimal("25.00"),
+            state=origin_state,
+            dest_state=dest_state,
+        )
+
+    db.flush()
+    lanes = client.get("/api/kof/lanes?level=state&min_loads=1")
+    assert lanes.status_code == 200
+    assert [(lane["origin"], lane["destination"]) for lane in lanes.json()] == [
+        ("IL", "IA")
+    ]
+
+    carriers = client.get("/api/kof/carriers")
+    assert carriers.status_code == 200
+    assert carriers.json()[0]["top_lanes"] == ["Chicago, IL → Des Moines, IA"]

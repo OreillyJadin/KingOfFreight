@@ -33,6 +33,7 @@ from app.integrations.kof.parser import (
     parse_first,
     parse_money,
     parse_row_key_or_order,
+    strip_more_suffix,
 )
 from app.models import (
     KofBranch,
@@ -45,6 +46,8 @@ from app.models import (
 
 PAGE_SIZE = 500
 MAX_PAGES = 100
+MAX_FULLTEXT_LOADS_PER_SYNC = 60
+FULLTEXT_STAGES = ("confirmation", "awaiting_pickup", "in_transit", "awaiting_delivery")
 _SYNC_LOCK = threading.Lock()
 
 
@@ -63,6 +66,10 @@ class SyncStats:
             "delivery_date": 0,
         }
     )
+    fulltext_loads_considered: int = 0
+    fulltext_loads_fetched: int = 0
+    fulltext_fields_fetched: int = 0
+    fulltext_errors: int = 0
     mapped_labels: set[str] = field(default_factory=set)
     raw_only_labels: set[str] = field(default_factory=set)
     duration_seconds: float = 0
@@ -74,6 +81,10 @@ class SyncStats:
             "master_pages": self.master_pages,
             "list_counts": self.list_counts,
             "unparseable": self.unparseable,
+            "fulltext_loads_considered": self.fulltext_loads_considered,
+            "fulltext_loads_fetched": self.fulltext_loads_fetched,
+            "fulltext_fields_fetched": self.fulltext_fields_fetched,
+            "fulltext_errors": self.fulltext_errors,
             "mapped_labels": sorted(self.mapped_labels),
             "raw_only_labels": sorted(self.raw_only_labels),
             "duration_seconds": self.duration_seconds,
@@ -281,6 +292,57 @@ def _upsert_master_rows(
     return page_upserted, page_changed
 
 
+def _refresh_active_fulltext(db: Session, client: KofClient, stats: SyncStats) -> None:
+    get_fulltext = getattr(client, "get_fulltext", None)
+    if not callable(get_fulltext):
+        return
+    loads = db.scalars(
+        select(KofLoad)
+        .where(
+            KofLoad.is_deleted.is_(False),
+            KofLoad.stage.in_(FULLTEXT_STAGES),
+        )
+        .order_by(KofLoad.order_no.desc())
+        .limit(MAX_FULLTEXT_LOADS_PER_SYNC)
+    ).all()
+    stats.fulltext_loads_considered = len(loads)
+    for load in loads:
+        raw = dict(load.raw or {})
+        fetched_for_load = False
+        for label, attribute in (("Notes", "notes_text"), ("log", "log_text")):
+            try:
+                text = get_fulltext(load.order_no, label)
+            except KofSiteError:
+                stats.fulltext_errors += 1
+                load.raw = raw
+                if fetched_for_load:
+                    stats.fulltext_loads_fetched += 1
+                db.commit()
+                return
+            if text is None:
+                continue
+            cleaned = strip_more_suffix(text) or ""
+            setattr(load, attribute, cleaned)
+            matching_labels = {
+                "notes": {"notes", "notescomments"},
+                "log": {"log", "loadlog"},
+            }[label.lower()]
+            matched = False
+            for raw_label in list(raw):
+                if _normalized_label(raw_label) in matching_labels:
+                    raw[raw_label] = cleaned
+                    matched = True
+            if not matched:
+                raw[label] = cleaned
+            load.raw = raw
+            stats.fulltext_fields_fetched += 1
+            fetched_for_load = True
+        load.raw = raw
+        if fetched_for_load:
+            stats.fulltext_loads_fetched += 1
+    db.commit()
+
+
 def _order_numbers_descending(parsed: ParsedList) -> bool:
     numbers = [
         number
@@ -379,6 +441,7 @@ def sync_with_client(
             break
         if kind == "incremental" and page == 2:
             break
+    _refresh_active_fulltext(db, client, stats)
     return stats
 
 
