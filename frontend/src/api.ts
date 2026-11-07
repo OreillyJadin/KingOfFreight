@@ -15,7 +15,7 @@ import type {
 
 type RequestOptions = RequestInit & { redirectOn401?: boolean };
 
-async function request<T>(
+export async function request<T>(
   path: string,
   options: RequestOptions = {},
 ): Promise<T> {
@@ -62,14 +62,29 @@ const json = (method: string, body?: unknown): RequestInit => ({
 });
 
 export const api = {
-  login: (password: string) =>
-    request<{ authenticated: boolean }>("/auth/login", {
-      ...json("POST", { password }),
-      redirectOn401: false,
-    }),
+  login: ({ username, password }: { username?: string; password: string }) =>
+    request<{ authenticated: boolean; username: string | null; must_set_password: boolean }>(
+      "/auth/login",
+      {
+        ...json("POST", { username: username?.trim() || null, password }),
+        redirectOn401: false,
+      },
+    ),
+  setPassword: (new_password: string) =>
+    request<{ ok: boolean }>("/auth/set-password", json("POST", { new_password })),
+  changePassword: (current_password: string, new_password: string) =>
+    request<{ ok: boolean }>(
+      "/auth/change-password",
+      json("POST", { current_password, new_password }),
+    ),
   logout: () => request<{ authenticated: boolean }>("/auth/logout", json("POST")),
   me: () =>
-    request<{ authenticated: boolean; broker_timezone: string }>("/auth/me"),
+    request<{
+      authenticated: boolean;
+      broker_timezone: string;
+      username?: string | null;
+      must_set_password?: boolean;
+    }>("/auth/me"),
   settings: () => request<BrokerPrefs>("/settings"),
   updateSettings: (partial: BrokerPrefsUpdate) =>
     request<BrokerPrefs>("/settings", json("PUT", partial)),

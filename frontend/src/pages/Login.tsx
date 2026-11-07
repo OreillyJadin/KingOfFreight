@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowRight, LockKeyhole } from "lucide-react";
+import { ArrowRight, LockKeyhole, UserRound } from "lucide-react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { api } from "../api";
 import { useToast } from "../useToast";
@@ -9,6 +9,7 @@ import { Wordmark } from "../components/Brand";
 import ThemeToggle from "../components/ThemeToggle";
 
 export default function Login() {
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const navigate = useNavigate();
@@ -19,14 +20,18 @@ export default function Login() {
   }, []);
   const login = useMutation({
     mutationFn: api.login,
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       await queryClient.invalidateQueries();
+      if (result.must_set_password) {
+        navigate("/set-password", { replace: true });
+        return;
+      }
       showToast("Welcome back.");
-      navigate("/inbox", { replace: true });
+      navigate("/dashboard", { replace: true });
     },
     onError: (issue: Error) => setError(issue.message || "Unable to sign in."),
   });
-  if (login.isSuccess) return <Navigate to="/inbox" replace />;
+  if (login.isSuccess && !login.data.must_set_password) return <Navigate to="/dashboard" replace />;
   return (
     <main className="relative grid min-h-screen bg-bg md:grid-cols-[1.05fr_0.95fr]">
       <ThemeToggle className="absolute right-4 top-4 z-20" />
@@ -70,17 +75,35 @@ export default function Login() {
               onSubmit={(event) => {
                 event.preventDefault();
                 setError("");
-                login.mutate(password);
+                login.mutate({ username, password });
               }}
             >
               <label className="block">
                 <span className="mb-2 block text-sm font-semibold text-fg-2">
-                  Broker password
+                  Username
+                </span>
+                <span className="relative block">
+                  <UserRound className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
+                  <Input
+                    autoFocus
+                    type="text"
+                    autoComplete="username"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    value={username}
+                    onChange={(event) => setUsername(event.target.value)}
+                    placeholder="Your username"
+                    className="h-12 pl-10 pr-3"
+                  />
+                </span>
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-sm font-semibold text-fg-2">
+                  Password
                 </span>
                 <span className="relative block">
                   <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
                   <Input
-                    autoFocus
                     required
                     type="password"
                     autoComplete="current-password"
@@ -110,7 +133,7 @@ export default function Login() {
             </form>
           </Card>
           <p className="mt-6 text-center text-xs text-subtle">
-            Secure broker access · Single-user workspace
+            Secure broker access
           </p>
         </div>
       </section>

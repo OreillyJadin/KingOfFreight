@@ -2,8 +2,15 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
   Boxes,
+  Briefcase,
+  Building2,
+  LayoutDashboard,
   LogOut,
   Mail,
+  Package,
+  Radar,
+  RefreshCw,
+  Route,
   Settings,
   Truck,
   X,
@@ -12,6 +19,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { api } from "../api";
+import { kof } from "../kof/api";
 import type { Alert, StatusUpdate } from "../types";
 import { formatClock } from "../utils";
 import { Badge, Button, Card } from "./ui";
@@ -23,6 +31,43 @@ const tabs = [
   { to: "/truckstop", label: "TruckStop", icon: Truck, key: "truckstop" },
   { to: "/status", label: "Delivery Status", icon: Boxes, key: "delivery" },
 ];
+
+const kofTabs = [
+  { to: "/dashboard", label: "Dashboard", short: "Dashboard", icon: LayoutDashboard },
+  { to: "/tracking", label: "Tracking", short: "Tracking", icon: Radar },
+  { to: "/loads", label: "Loads", short: "Loads", icon: Package },
+  { to: "/customers", label: "Customers", short: "Customers", icon: Building2 },
+  { to: "/carriers", label: "Carriers & lanes", short: "Carriers", icon: Route },
+  { to: "/sales", label: "Sales", short: "Sales", icon: Briefcase },
+];
+
+const mobileTabs = [
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, key: "" },
+  { to: "/tracking", label: "Tracking", icon: Radar, key: "" },
+  { to: "/loads", label: "Loads", icon: Package, key: "" },
+  { to: "/status", label: "Status", icon: Boxes, key: "delivery" },
+  { to: "/inbox", label: "Inbox", icon: Mail, key: "inbox" },
+  { to: "/truckstop", label: "TruckStop", icon: Truck, key: "truckstop" },
+  { to: "/customers", label: "Customers", icon: Building2, key: "" },
+  { to: "/carriers", label: "Carriers", icon: Route, key: "" },
+  { to: "/sales", label: "Sales", icon: Briefcase, key: "" },
+];
+
+function syncLabel(lastSuccess: string | null | undefined, running: boolean) {
+  if (running) return "Syncing with KOF…";
+  if (!lastSuccess) return "Not synced yet";
+  const minutes = Math.max(0, Math.round((Date.now() - new Date(lastSuccess).getTime()) / 60000));
+  if (minutes < 1) return "Synced just now";
+  if (minutes < 60) return `Synced ${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 48) return `Synced ${hours}h ago`;
+  return `Synced ${Math.round(hours / 24)}d ago`;
+}
+
+const sideLink = ({ isActive }: { isActive: boolean }) =>
+  `flex min-h-11 md:min-h-10 items-center gap-3 rounded-r-xl border-l-2 px-3 text-sm font-semibold transition-colors duration-150 ${
+    isActive ? "border-accent bg-surface-3 text-fg" : "border-transparent text-fg-2 hover:bg-surface-2"
+  }`;
 
 function AlertsPanel({
   id,
@@ -120,6 +165,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       "/truckstop": "TruckStop · Fifth Wheel",
       "/status": "Delivery Status · Fifth Wheel",
       "/settings": "Settings · Fifth Wheel",
+      "/dashboard": "Dashboard · Fifth Wheel",
+      "/tracking": "Tracking · Fifth Wheel",
+      "/loads": "Loads · Fifth Wheel",
+      "/customers": "Customers · Fifth Wheel",
+      "/carriers": "Carriers & lanes · Fifth Wheel",
+      "/sales": "Sales · Fifth Wheel",
     };
     document.title = titles[location.pathname] ?? "Fifth Wheel";
   }, [location.pathname]);
@@ -159,6 +210,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     queryFn: api.pendingUpdates,
     refetchInterval: 30_000,
   });
+  const sync = useQuery({
+    queryKey: ["kof", "sync"],
+    queryFn: kof.syncStatus,
+    refetchInterval: 60_000,
+    retry: false,
+  });
   const alertItems = alerts.data ?? [];
   const pendingItems = pending.data ?? [];
   const totalAttention = alertItems.length + pendingItems.length;
@@ -184,10 +241,21 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     <div className="min-h-screen bg-bg pb-24 text-fg md:pb-0">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[200] rounded-lg bg-surface px-4 py-2 text-sm font-semibold text-fg shadow-card">Skip to content</a>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-surface md:flex">
-        <NavLink to="/inbox" className="flex h-[68px] shrink-0 items-center gap-2.5 px-5">
+        <NavLink to="/dashboard" className="flex h-[68px] shrink-0 items-center gap-2.5 px-5">
           <Wordmark className="min-w-0 truncate" markClassName="h-8 w-8 text-accent" />
         </NavLink>
-        <nav aria-label="Main" className="space-y-1 px-3 pt-3">
+        <div className="flex-1 overflow-y-auto">
+        <p className="px-5 pt-3 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">Insights</p>
+        <nav aria-label="Insights" className="space-y-0.5 px-3 pt-1.5">
+          {kofTabs.map(({ to, label, icon: Icon }) => (
+            <NavLink key={to} to={to} className={sideLink}>
+              <Icon className="h-4 w-4 shrink-0" />
+              <span className="min-w-0 flex-1 truncate">{label}</span>
+            </NavLink>
+          ))}
+        </nav>
+        <p className="px-5 pt-5 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">Operate</p>
+        <nav aria-label="Main" className="space-y-0.5 px-3 pt-1.5">
           {tabs.map(({ to, label, icon: Icon, key }) => (
             <NavLink
               key={to}
@@ -229,7 +297,25 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <Settings className="h-4 w-4 shrink-0" />
           Settings
         </NavLink>
-        <div className="mt-auto border-t border-line p-3">
+        </div>
+        <div className="border-t border-line p-3">
+          <NavLink
+            to="/settings#sync"
+            className="mb-1 flex min-h-10 items-center gap-2.5 rounded-xl px-3 text-xs font-semibold text-muted hover:bg-surface-2 hover:text-fg"
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 shrink-0 ${sync.data?.running ? "motion-safe:animate-spin" : ""} ${
+                sync.data?.last_run?.status === "error" ? "text-danger-ink" : ""
+              }`}
+            />
+            <span className="truncate">
+              {sync.isError || !sync.data?.configured
+                ? "KOF sync not set up"
+                : sync.data.last_run?.status === "error"
+                  ? "Last sync failed"
+                  : syncLabel(sync.data.last_success_at, sync.data.running)}
+            </span>
+          </NavLink>
           <div className="relative mb-1">
             <button
               ref={sidebarAlertsButton}
@@ -276,7 +362,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </aside>
       <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur md:hidden">
         <div className="mx-auto flex h-[68px] max-w-6xl items-center justify-between px-4 sm:px-6">
-          <NavLink to="/inbox" className="flex min-w-0 items-center gap-2.5">
+          <NavLink to="/dashboard" className="flex min-w-0 items-center gap-2.5">
             <Wordmark className="min-w-0 truncate" markClassName="h-8 w-8 text-accent" />
           </NavLink>
           <div className="flex items-center gap-1.5">
@@ -339,20 +425,20 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         {children}
       </main>
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
-        <div className="mx-auto grid max-w-xl grid-cols-3 px-2 pt-1.5">
-          {tabs.map(({ to, label, icon: Icon, key }) => (
+        <div className="flex snap-x gap-0.5 overflow-x-auto px-2 pt-1.5 [scrollbar-width:none]">
+          {mobileTabs.map(({ to, label, icon: Icon, key }) => (
             <NavLink
               key={to}
               to={to}
               className={({ isActive }) =>
-                `flex min-h-[60px] flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-semibold ${
+                `flex min-h-[60px] min-w-[72px] flex-1 snap-start flex-col items-center justify-center gap-1 rounded-xl px-1 text-[11px] font-semibold ${
                   isActive ? "text-accent-ink" : "text-muted"
                 }`
               }
             >
               <span className="relative">
                 <Icon className="h-5 w-5" />
-                {countFor(key) > 0 && (
+                {key && countFor(key) > 0 && (
                   <span className="absolute -right-2 -top-1 grid min-h-5 min-w-5 place-items-center rounded-full bg-accent px-1 text-[11px] font-bold text-on-accent">
                     <span className="tabular-nums">{countFor(key) > 9 ? "9+" : countFor(key)}</span>
                   </span>
