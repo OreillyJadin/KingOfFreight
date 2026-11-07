@@ -44,7 +44,7 @@ function BranchDetail({ branch, range }: { branch: string; range: { start?: stri
       <div>
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-xl font-extrabold tracking-tight text-fg">{data.branch}</h2>
-          {data.working_status && <Badge>{data.working_status}</Badge>}
+          {data.working_status && !/^\d+$/.test(data.working_status) && <Badge>{data.working_status}</Badge>}
         </div>
         <p className="mt-1 text-sm text-muted">
           {[data.customer, place(data.city, data.state)].filter(Boolean).join(" · ")}
