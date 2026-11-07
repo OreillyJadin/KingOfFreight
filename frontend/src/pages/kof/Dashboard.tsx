@@ -83,7 +83,7 @@ export default function Dashboard() {
         )}
       </section>
 
-      {value === "all" && summary.data && (
+      {value === "all" && summary.data && summary.data.undated_loads > 0 && (
         <p className="mt-2 text-xs text-muted">
           {summary.data.undated_loads} loads without a sale date aren&apos;t included.
         </p>
