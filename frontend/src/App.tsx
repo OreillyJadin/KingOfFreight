@@ -9,6 +9,14 @@ import Status from "./pages/Status";
 import Settings from "./pages/Settings";
 import Tracking from "./pages/Tracking";
 import TruckStop from "./pages/TruckStop";
+import SetPassword from "./pages/SetPassword";
+import Dashboard from "./pages/kof/Dashboard";
+import KofTracking from "./pages/kof/KofTracking";
+import Loads from "./pages/kof/Loads";
+import Customers from "./pages/kof/Customers";
+import Branches from "./pages/kof/Branches";
+import Carriers from "./pages/kof/Carriers";
+import Sales from "./pages/kof/Sales";
 import { setBrokerTimeZone } from "./utils";
 
 function ProtectedApp() {
@@ -21,15 +29,23 @@ function ProtectedApp() {
     );
   }
   if (auth.isError || !auth.data?.authenticated) return <Navigate to="/login" replace />;
+  if (auth.data.must_set_password) return <Navigate to="/set-password" replace />;
   setBrokerTimeZone(auth.data.broker_timezone);
   return (
     <AppLayout>
       <Routes>
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/tracking" element={<KofTracking />} />
+        <Route path="/loads" element={<Loads />} />
+        <Route path="/customers" element={<Customers />} />
+        <Route path="/branches" element={<Branches />} />
+        <Route path="/carriers" element={<Carriers />} />
+        <Route path="/sales" element={<Sales />} />
         <Route path="/inbox" element={<Inbox />} />
         <Route path="/truckstop" element={<TruckStop />} />
         <Route path="/status" element={<Status />} />
         <Route path="/settings" element={<Settings />} />
-        <Route path="*" element={<Navigate to="/inbox" replace />} />
+        <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </AppLayout>
   );
@@ -39,6 +55,7 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
+      <Route path="/set-password" element={<SetPassword />} />
       <Route path="/t/:token" element={<Tracking />} />
       <Route path="/*" element={<ProtectedApp />} />
     </Routes>

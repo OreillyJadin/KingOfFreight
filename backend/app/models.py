@@ -1,13 +1,15 @@
 import secrets
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     LargeBinary,
     JSON,
@@ -15,6 +17,8 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -297,3 +301,150 @@ class BrokerSettings(Base):
     updated_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
+
+
+class User(Base):
+    __tablename__ = "users"
+    __table_args__ = (
+        Index(
+            "uq_users_username_lower",
+            func.lower(text("username")),
+            unique=True,
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(120), nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    password_version: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    must_set_password: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class KofLoad(Base):
+    __tablename__ = "kof_loads"
+
+    order_no: Mapped[int] = mapped_column(primary_key=True)
+    date_of_sale: Mapped[date | None] = mapped_column(Date, nullable=True)
+    customer: Mapped[str | None] = mapped_column(String(250), nullable=True)
+    branch: Mapped[str | None] = mapped_column(String(250), nullable=True)
+    carrier: Mapped[str | None] = mapped_column(String(250), nullable=True)
+    mc: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    origin_city: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    origin_state: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    origin_zip: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    dest_city: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    dest_state: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    dest_zip: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    shipper_company: Mapped[str | None] = mapped_column(String(250), nullable=True)
+    shipper_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    shipper_city: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    shipper_state: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    shipper_zip: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    shipper_phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    shipper_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    consignee_company: Mapped[str | None] = mapped_column(String(250), nullable=True)
+    consignee_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    consignee_city: Mapped[str | None] = mapped_column(String(150), nullable=True)
+    consignee_state: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    consignee_zip: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    consignee_phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    consignee_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    pick_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    pick_tz: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    delivery_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    drop_tz: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    equipment: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    weight: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    price: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    cost: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    profit: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
+    billed_status: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    paid_status: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    invoice_no: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    po: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    pu: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    confirmation_sent: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    confirmation_received: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    confirmation_returned: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    pick_status: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    delivery_status: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    on_time: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    notes_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    log_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    booker: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    rep: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    product_description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    carrier_contact_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    carrier_contact_phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    carrier_contact_email: Mapped[str | None] = mapped_column(
+        String(320), nullable=True
+    )
+    dispatch_contact: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    dispatch_phone: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    stage: Mapped[str] = mapped_column(String(40), default="booked", index=True)
+    is_deleted: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    raw: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    synced_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+
+
+class KofCustomer(Base):
+    __tablename__ = "kof_customers"
+
+    customer_key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    name: Mapped[str | None] = mapped_column(String(250), nullable=True)
+    raw: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KofBranch(Base):
+    __tablename__ = "kof_branches"
+
+    branch_key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    name: Mapped[str | None] = mapped_column(String(250), nullable=True)
+    raw: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KofListSnapshot(Base):
+    __tablename__ = "kof_list_snapshots"
+
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    label: Mapped[str] = mapped_column(String(200))
+    columns: Mapped[list[str]] = mapped_column(JSON, default=list)
+    rows: Mapped[list[list[str]]] = mapped_column(JSON, default=list)
+    count: Mapped[int] = mapped_column(Integer, default=0)
+    synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utcnow)
+
+
+class KofSyncRun(Base):
+    __tablename__ = "kof_sync_runs"
+    __table_args__ = (
+        Index(
+            "uq_kof_sync_runs_single_running",
+            "status",
+            unique=True,
+            postgresql_where=text("status = 'running'"),
+            sqlite_where=text("status = 'running'"),
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    status: Mapped[str] = mapped_column(String(20), index=True)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    loads_upserted: Mapped[int] = mapped_column(Integer, default=0)
+    counts: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)

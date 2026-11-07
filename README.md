@@ -30,6 +30,25 @@ npm run dev
 Open `http://localhost:5173`. Vite proxies `/api` to the backend on port 8000 so
 the signed session cookie remains same-origin.
 
+### Accounts and KOF data sync
+
+Set `BOOTSTRAP_USERNAME` to create the initial named user on application
+startup. That user's first login uses the configured `BROKER_PASSWORD` and
+requires a personal password of at least 10 characters before accessing other
+API routes. Later logins use the personal password. The legacy login with a
+blank username and `BROKER_PASSWORD` remains available for the existing broker
+account flow.
+
+KOF sync is read-only: it signs in to the authorized intranet modules, reads
+list pages, and stores loads and sales-list snapshots in PostgreSQL. Set
+`KOF_USERNAME` and `KOF_PASSWORD` to configure the site account. Sync remains
+disabled unless `KOF_SYNC_ENABLED=true`; when enabled with
+`SCHEDULER_ENABLED=true`, the scheduler runs incremental syncs at
+`KOF_SYNC_INTERVAL_MINUTES` intervals and a full sync at
+`KOF_FULL_SYNC_HOUR_UTC`. An authenticated broker can also start a full or
+incremental sync with `POST /api/kof/sync?kind=full` or
+`POST /api/kof/sync?kind=incremental`. `GET /api/kof/sync` reports status.
+
 See [DESIGN.md](DESIGN.md) for frontend brand, theme, layout, and accessibility conventions.
 
 Run the app as a single Uvicorn worker and a single instance. The in-process
@@ -47,7 +66,7 @@ docker compose exec backend python -m scripts.seed
 ### Deploy on Render
 
 Connect this GitHub repository in Render, choose **New → Blueprint**, select the
-repository, set `BROKER_PASSWORD` when prompted, and deploy. The Blueprint
+repository, set `BROKER_PASSWORD` and `BOOTSTRAP_USERNAME`, and deploy. The Blueprint
 creates a paid Render Postgres database and a single always-on web instance. It
 temporarily keeps the legacy uploads disk and `UPLOAD_DIR` setting so the first
 deploy can migrate existing BOL PDFs into Postgres. The first deploy fails and
@@ -86,7 +105,7 @@ Set these required environment variables:
 | Variable | Purpose |
 |---|---|
 | `DATABASE_URL` | PostgreSQL connection URL; `postgres://`, `postgresql://`, and `postgresql+psycopg://` are accepted |
-| `BROKER_PASSWORD` | Password for the single broker account |
+| `BROKER_PASSWORD` | Bootstrap and legacy broker login password |
 | `SECRET_KEY` | Random value of at least 32 characters; generate one with `openssl rand -base64 32` |
 | `ENV` | Set to `production` |
 | `PUBLIC_BASE_URL` | Public HTTPS URL for driver tracking links; defaults to Render's service URL on Render |
@@ -115,9 +134,11 @@ The dump includes BOL PDFs. After moving, update the Twilio webhook URL and
 
 The demo broker password is `changeme`; replace it before exposing the service.
 The API is at `http://localhost:8000`, with health check `/health`. OpenAPI docs
-are available at `/docs`. `POST /api/auth/login` accepts `{"password":"..."}`;
-the signed httpOnly session cookie is used for broker routes. Public driver
-tracking and provider webhooks do not require broker auth.
+are available at `/docs`. `POST /api/auth/login` accepts a password and an
+optional username; named users created from `BOOTSTRAP_USERNAME` set a personal
+password on first login. A blank username retains the legacy broker-password
+login. The signed httpOnly session cookie is used for broker routes. Public
+driver tracking and provider webhooks do not require broker auth.
 
 ## Environment variables
 
@@ -126,7 +147,8 @@ All settings can be supplied in `.env` or as environment variables:
 | Variable | Default | Purpose |
 |---|---|---|
 | `DATABASE_URL` | `postgresql+psycopg://freight:freight@localhost:5432/freight` | SQLAlchemy database URL (SQLite is supported for tests) |
-| `BROKER_PASSWORD` | **required** (`changeme` in `.env.example`) | Single broker login password |
+| `BROKER_PASSWORD` | **required** (`changeme` in `.env.example`) | Bootstrap and legacy broker login password |
+| `BOOTSTRAP_USERNAME` | empty | Create this named user at startup; first login uses `BROKER_PASSWORD` |
 | `SECRET_KEY` | development placeholder | Signing key; production requires a random value at least 32 characters long |
 | `BROKER_NAME` | `Freight Broker` | Name in status emails |
 | `BROKER_COMPANY` | `Freight Brokerage` | Company name in messages and tracking |
@@ -138,6 +160,12 @@ All settings can be supplied in `.env` or as environment variables:
 | `CHECKIN_DEFAULT_CHANNEL` | `sms` | Default driver check-in channel (`sms` or `email`) |
 | `SCHEDULER_ENABLED` | `true` | Enable in-process check-in and inbox scheduler |
 | `SCHEDULER_INTERVAL_SECONDS` | `60` | Scheduler interval |
+| `KOF_SYNC_ENABLED` | `false` | Enable scheduled KOF synchronization |
+| `KOF_USERNAME` | empty | KOF intranet username |
+| `KOF_PASSWORD` | empty | KOF intranet password |
+| `KOF_BASE_URL` | `https://kingsoffreight.com/` | KOF intranet base URL |
+| `KOF_SYNC_INTERVAL_MINUTES` | `15` | Incremental sync interval when KOF sync and scheduler are enabled |
+| `KOF_FULL_SYNC_HOUR_UTC` | `8` | UTC hour for the daily full sync |
 | `ENV` | `development` | Dev simulation endpoints mount only in development |
 | `SMS_PROVIDER` | `mock` | `mock` or `twilio` |
 | `TWILIO_ACCOUNT_SID` | empty | Twilio account SID |

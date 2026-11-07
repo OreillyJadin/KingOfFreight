@@ -2,17 +2,20 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import RequestResponseEndpoint
 
+from app.auth import COOKIE_NAME, decode_session, ensure_bootstrap_user, session_user
 from app.config import get_settings
 from app.db import SessionLocal
 from app.integrations.email import get_email_provider
 from app.integrations.llm import get_llm_provider
 from app.routers.api import _ingest_email_message, dev_public, protected, public
 from app.routers.auth import router as auth_router
+from app.routers.kof import router as kof_router
 from app.services.checkins import run_checkin_tick
 
 settings = get_settings()
@@ -34,6 +37,8 @@ def _poll_inbox() -> None:
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    with SessionLocal() as db:
+        ensure_bootstrap_user(db, settings.bootstrap_username)
     if settings.scheduler_enabled:
         scheduler.add_job(
             _run_tick,
@@ -48,6 +53,21 @@ async def lifespan(_: FastAPI):
                 seconds=settings.scheduler_interval_seconds,
                 id="inbox-poll",
             )
+        if (
+            settings.kof_sync_enabled
+            and settings.kof_username
+            and settings.kof_password
+        ):
+            from app.services.kof_sync import run_scheduled_kof_sync
+
+            scheduler.add_job(
+                run_scheduled_kof_sync,
+                "interval",
+                minutes=max(1, settings.kof_sync_interval_minutes),
+                id="kof-sync",
+                max_instances=1,
+                coalesce=True,
+            )
         scheduler.start()
     yield
     if scheduler.running:
@@ -55,6 +75,28 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="KingOfFreight API", version="1.0.0", lifespan=lifespan)
+
+
+@app.middleware("http")
+async def password_setup_gate(request: Request, call_next: RequestResponseEndpoint):
+    allowed_paths = {
+        "/api/auth/me",
+        "/api/auth/set-password",
+        "/api/auth/logout",
+    }
+    if request.url.path.startswith("/api/") and request.url.path not in allowed_paths:
+        token = request.cookies.get(COOKIE_NAME)
+        payload = decode_session(token) if token else None
+        if payload is not None and payload.get("uid") is not None:
+            with SessionLocal() as db:
+                user = session_user(payload, db)
+                if user is not None and user.must_set_password:
+                    return JSONResponse(
+                        {"detail": "password_setup_required"}, status_code=403
+                    )
+    return await call_next(request)
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -65,6 +107,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(protected)
 app.include_router(public)
+app.include_router(kof_router)
 if settings.env == "development":
     app.include_router(dev_public)
 

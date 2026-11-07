@@ -6,6 +6,7 @@ import { api } from "../api";
 import type { BrokerPrefs, BrokerPrefsUpdate } from "../types";
 import { setBrokerTimeZone } from "../utils";
 import { useToast } from "../useToast";
+import { ChangePasswordCard, KofSyncCard } from "../kof/SettingsSections";
 
 const timezones = [
   ["Eastern", "America/New_York"],
@@ -86,7 +87,7 @@ export default function Settings() {
       <PageHeading
         eyebrow="Workspace"
         title="Settings"
-        description="Manage your broker details and driver check-in defaults."
+        description="Broker details, check-in defaults, King of Freight sync and your password."
       />
       <form onSubmit={submit} className="space-y-5">
         <Card as="section" className="p-5 sm:p-6">
@@ -199,6 +200,10 @@ export default function Settings() {
           {save.isPending ? "Saving…" : "Save settings"}
         </Button>
       </form>
+      <div className="mt-8 space-y-5">
+        <KofSyncCard />
+        <ChangePasswordCard />
+      </div>
     </div>
   );
 }

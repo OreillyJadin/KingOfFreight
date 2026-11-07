@@ -21,6 +21,8 @@ services:
         generateValue: true
       - key: BROKER_PASSWORD
         sync: false
+      - key: BOOTSTRAP_USERNAME
+        sync: false
       - key: ENV
         value: production
       # Legacy: only read by the BOL-to-Postgres migration on first deploy of this version; safe to remove afterwards.
@@ -28,6 +30,18 @@ services:
         value: /app/backend/data/uploads
       - key: SCHEDULER_ENABLED
         value: "true"
+      - key: KOF_SYNC_ENABLED
+        value: "false"
+      - key: KOF_USERNAME
+        sync: false
+      - key: KOF_PASSWORD
+        sync: false
+      - key: KOF_BASE_URL
+        value: https://kingsoffreight.com/
+      - key: KOF_SYNC_INTERVAL_MINUTES
+        value: "15"
+      - key: KOF_FULL_SYNC_HOUR_UTC
+        value: "8"
 
 databases:
   - name: kingoffreight-db

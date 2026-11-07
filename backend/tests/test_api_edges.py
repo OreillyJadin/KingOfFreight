@@ -56,6 +56,8 @@ def test_auth_public_routes_and_twilio_signature(client, db, load_data, monkeypa
     assert client.get("/api/auth/me").json() == {
         "authenticated": True,
         "broker_timezone": get_settings().broker_timezone,
+        "username": None,
+        "must_set_password": False,
     }
     session_cookie = client.cookies.get(COOKIE_NAME)
     assert session_cookie and "test-password" not in session_cookie
@@ -63,7 +65,11 @@ def test_auth_public_routes_and_twilio_signature(client, db, load_data, monkeypa
     decoded_payload = base64.urlsafe_b64decode(
         encoded_payload + "=" * (-len(encoded_payload) % 4)
     )
-    assert json.loads(decoded_payload) == {"broker": True}
+    assert json.loads(decoded_payload) == {
+        "broker": True,
+        "uid": None,
+        "password_version": None,
+    }
 
 
 def test_password_change_invalidates_existing_session(monkeypatch):
