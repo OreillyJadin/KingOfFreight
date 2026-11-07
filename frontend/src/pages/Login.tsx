@@ -104,7 +104,6 @@ export default function Login() {
                 <span className="relative block">
                   <LockKeyhole className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-subtle" />
                   <Input
-                    required
                     type="password"
                     autoComplete="current-password"
                     value={password}
@@ -114,6 +113,7 @@ export default function Login() {
                   />
                 </span>
               </label>
+              <p className="-mt-2 text-xs text-muted">First time signing in? Enter your username and leave the password blank.</p>
               {error && (
                 <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger-ink" role="alert">
                   {error}

@@ -83,6 +83,12 @@ export default function Dashboard() {
         )}
       </section>
 
+      {value === "all" && summary.data && summary.data.undated_loads > 0 && (
+        <p className="mt-2 text-xs text-muted">
+          {summary.data.undated_loads} loads without a sale date aren&apos;t included.
+        </p>
+      )}
+
       {summary.isError && (
         <div className="mt-4">
           <ErrorState message={(summary.error as Error).message} onRetry={() => summary.refetch()} />
@@ -117,7 +123,7 @@ export default function Dashboard() {
       </Card>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-2">
-        <Card>
+        <Card className="min-w-0 overflow-hidden">
           <h2 className="border-b border-line px-4 py-3 font-bold text-fg">Busiest lanes</h2>
           {lanes.isPending ? (
             <TableSkeleton rows={6} />
@@ -146,7 +152,7 @@ export default function Dashboard() {
           )}
         </Card>
 
-        <Card>
+        <Card className="min-w-0 overflow-hidden">
           <h2 className="border-b border-line px-4 py-3 font-bold text-fg">Top customers</h2>
           {customers.isPending ? (
             <TableSkeleton rows={6} />

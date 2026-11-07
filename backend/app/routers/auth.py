@@ -63,6 +63,14 @@ def login(
             raise HTTPException(status_code=401, detail="Invalid username or password")
         if user.password_hash is not None:
             valid_password = password_hash_matches(payload.password, user.password_hash)
+        elif (
+            user.must_set_password
+            and (
+                bootstrap_username := (get_settings().bootstrap_username or "").strip()
+            )
+            and user.username.casefold() == bootstrap_username.casefold()
+        ):
+            valid_password = True
         else:
             valid_password = user.must_set_password and password_matches(
                 payload.password
@@ -125,7 +133,7 @@ def change_password(
     if user is None or user.must_set_password:
         raise HTTPException(status_code=403, detail="personal_account_required")
     if not password_hash_matches(payload.current_password, user.password_hash):
-        raise HTTPException(status_code=401, detail="Invalid password")
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
     user.password_hash = hash_password(payload.new_password)
     user.password_version += 1
     db.commit()
