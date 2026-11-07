@@ -37,6 +37,8 @@ router = APIRouter(
     dependencies=[Depends(require_broker)],
 )
 _ACTIVE_STAGES = ("awaiting_pickup", "in_transit", "awaiting_delivery")
+_PICK_TIME_LABELS = ("Pick Time", "Pickup Time")
+_DELIVERY_TIME_LABELS = ("Delivery Time", "Drop Time", "Delivery Appointment Time")
 _NOTE_TIMESTAMP = re.compile(
     r"(?<!\d)(?P<at>\d{4}-\d{2}-\d{2}[ \t]+\d{2}:\d{2}:\d{2}|"
     r"\d{1,2}/\d{1,2}/\d{4}[ \t]+\d{1,2}:\d{2}:\d{2}[ \t]+[ap]m)(?!\d)",
@@ -247,10 +249,8 @@ def _raw_time_known(load: KofLoad, labels: tuple[str, ...]) -> bool:
 
 def _is_late(load: KofLoad, now: datetime | None = None) -> bool:
     now_utc = now or datetime.now(timezone.utc)
-    pick_time_known = _raw_time_known(load, ("Pick Time", "Pickup Time"))
-    delivery_time_known = _raw_time_known(
-        load, ("Delivery Time", "Drop Time", "Delivery Appointment Time")
-    )
+    pick_time_known = _raw_time_known(load, _PICK_TIME_LABELS)
+    delivery_time_known = _raw_time_known(load, _DELIVERY_TIME_LABELS)
     if load.stage == "awaiting_pickup":
         return bool(
             not _status_reached(load.pick_status)
@@ -298,8 +298,10 @@ def _load_row(load: KofLoad, now: datetime | None = None) -> dict:
         "dest_city": load.dest_city,
         "dest_state": load.dest_state,
         "pick_at": load.pick_at.isoformat() if load.pick_at else None,
+        "pick_time_known": _raw_time_known(load, _PICK_TIME_LABELS),
         "pick_tz": load.pick_tz,
         "delivery_at": load.delivery_at.isoformat() if load.delivery_at else None,
+        "delivery_time_known": _raw_time_known(load, _DELIVERY_TIME_LABELS),
         "drop_tz": load.drop_tz,
         "equipment": load.equipment,
         "weight": _number(load.weight),

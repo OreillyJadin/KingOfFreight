@@ -13,7 +13,15 @@ import {
   MoneyCell,
   TableSkeleton,
 } from "../../kof/components";
-import { money, place, shortDate, stageClass, stageLabels, stageOrder } from "../../kof/format";
+import {
+  appointment,
+  money,
+  place,
+  shortDate,
+  stageClass,
+  stageLabels,
+  stageOrder,
+} from "../../kof/format";
 
 const PAGE_SIZE = 50;
 
@@ -67,17 +75,27 @@ function Detail({ orderNo }: { orderNo: number }) {
 
       <div className="grid gap-4 sm:grid-cols-2">
         {[
-          { title: "Pick up", party: load.shipper, at: load.pick_at, tz: load.pick_tz },
-          { title: "Deliver", party: load.consignee, at: load.delivery_at, tz: load.drop_tz },
+          {
+            title: "Pick up",
+            party: load.shipper,
+            at: load.pick_at,
+            timeKnown: load.pick_time_known,
+            tz: load.pick_tz,
+          },
+          {
+            title: "Deliver",
+            party: load.consignee,
+            at: load.delivery_at,
+            timeKnown: load.delivery_time_known,
+            tz: load.drop_tz,
+          },
         ].map((stop) => (
           <section key={stop.title}>
             <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">{stop.title}</h3>
             <p className="mt-1 font-semibold text-fg">{stop.party.company || "—"}</p>
             <p className="text-sm text-fg-2">{stop.party.address}</p>
             <p className="text-sm text-fg-2">{place(stop.party.city, stop.party.state)} {stop.party.zip}</p>
-            <p className="mt-1 text-sm text-muted">
-              {shortDate(stop.at)} {stop.tz && <span className="text-xs">({stop.tz})</span>}
-            </p>
+            <p className="mt-1 text-sm text-muted">{appointment(stop.at, stop.timeKnown, stop.tz)}</p>
             {stop.party.phone && <p className="text-sm text-muted">{stop.party.phone}</p>}
           </section>
         ))}

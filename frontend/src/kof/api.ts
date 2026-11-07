@@ -23,8 +23,10 @@ export type KofLoadRow = {
   dest_city: string | null;
   dest_state: string | null;
   pick_at: string | null;
+  pick_time_known: boolean;
   pick_tz: string | null;
   delivery_at: string | null;
+  delivery_time_known: boolean;
   drop_tz: string | null;
   equipment: string | null;
   weight: number | null;
