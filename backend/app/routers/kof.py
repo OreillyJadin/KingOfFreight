@@ -5,6 +5,7 @@ from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import (
     Integer,
     String,
@@ -21,8 +22,13 @@ from sqlalchemy.orm import Session
 from app.auth import require_broker
 from app.config import get_settings
 from app.db import get_db
+from app.integrations.kof.client import KofClient
 from app.integrations.kof.parser import parse_time, strip_more_suffix
-from app.models import KofBranch, KofListSnapshot, KofLoad, KofSyncRun
+from app.models import KofBranch, KofConnection, KofListSnapshot, KofLoad, KofSyncRun
+from app.services.kof_credentials import (
+    encrypt_kof_password,
+    get_kof_credentials,
+)
 from app.services.kof_sync import start_sync
 
 router = APIRouter(
@@ -36,6 +42,83 @@ _NOTE_TIMESTAMP = re.compile(
     r"\d{1,2}/\d{1,2}/\d{4}[ \t]+\d{1,2}:\d{2}:\d{2}[ \t]+[ap]m)(?!\d)",
     re.IGNORECASE,
 )
+
+
+class KofConnectionRequest(BaseModel):
+    username: str = Field(min_length=1, max_length=120)
+    password: str = Field(min_length=1)
+
+    @field_validator("username")
+    @classmethod
+    def normalize_username(cls, username: str) -> str:
+        username = username.strip()
+        if not username:
+            raise ValueError("Username is required")
+        return username
+
+
+def _connection_response(db: Session) -> dict:
+    credentials = get_kof_credentials(db)
+    return {
+        "configured": credentials is not None,
+        "source": credentials[2] if credentials else None,
+        "username": credentials[0] if credentials else None,
+    }
+
+
+@router.get("/connection")
+def get_kof_connection(db: Session = Depends(get_db)) -> dict:
+    return _connection_response(db)
+
+
+@router.put("/connection")
+def put_kof_connection(
+    body: KofConnectionRequest,
+    db: Session = Depends(get_db),
+    user=Depends(require_broker),
+) -> dict:
+    credentials = get_kof_credentials(db)
+    if credentials is not None and credentials[2] == "env":
+        raise HTTPException(
+            status_code=409, detail="KOF credentials are configured on the server"
+        )
+
+    client = KofClient(body.username, body.password, get_settings().kof_base_url)
+    try:
+        client.login()
+    except Exception:
+        raise HTTPException(
+            status_code=400,
+            detail="Couldn't sign in to King of Freight with that username and password",
+        ) from None
+    finally:
+        client.close()
+
+    connection = db.get(KofConnection, 1)
+    if connection is None:
+        connection = KofConnection(
+            id=1,
+            username=body.username,
+            password_encrypted=encrypt_kof_password(body.password),
+            updated_by_user_id=user.id if user else None,
+        )
+        db.add(connection)
+    else:
+        connection.username = body.username
+        connection.password_encrypted = encrypt_kof_password(body.password)
+        connection.updated_at = datetime.now(timezone.utc)
+        connection.updated_by_user_id = user.id if user else None
+    db.commit()
+    start_sync("full")
+    return _connection_response(db)
+
+
+@router.delete("/connection", status_code=204)
+def delete_kof_connection(db: Session = Depends(get_db)) -> None:
+    connection = db.get(KofConnection, 1)
+    if connection is not None:
+        db.delete(connection)
+        db.commit()
 
 
 def _date_range(start: date | None, end: date | None) -> tuple[date, date]:
@@ -590,6 +673,7 @@ def _average_summary(db: Session, filters: list) -> dict:
 @router.get("/sync")
 def sync_status(db: Session = Depends(get_db)) -> dict:
     settings = get_settings()
+    credentials = get_kof_credentials(db)
     last_run = db.scalar(
         select(KofSyncRun).order_by(KofSyncRun.started_at.desc()).limit(1)
     )
@@ -600,8 +684,10 @@ def sync_status(db: Session = Depends(get_db)) -> dict:
         .limit(1)
     )
     return {
-        "configured": bool(settings.kof_username and settings.kof_password),
-        "enabled": settings.kof_sync_enabled,
+        "configured": credentials is not None,
+        "enabled": bool(
+            credentials and (credentials[2] == "app" or settings.kof_sync_enabled)
+        ),
         "running": bool(last_run and last_run.status == "running"),
         "load_count": int(db.scalar(select(func.count(KofLoad.order_no))) or 0),
         "last_run": (
@@ -624,9 +710,9 @@ def sync_status(db: Session = Depends(get_db)) -> dict:
 @router.post("/sync", status_code=202)
 def start_sync_endpoint(
     kind: Literal["incremental", "full"] = Query(default="incremental"),
+    db: Session = Depends(get_db),
 ) -> dict[str, bool]:
-    settings = get_settings()
-    if not settings.kof_username or not settings.kof_password:
+    if get_kof_credentials(db) is None:
         raise HTTPException(status_code=400, detail="KOF sync is not configured")
     try:
         run_id = start_sync(kind)

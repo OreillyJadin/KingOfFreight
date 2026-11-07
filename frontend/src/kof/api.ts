@@ -83,6 +83,12 @@ export type KofSyncStatus = {
   last_success_at: string | null;
 };
 
+export type KofConnection = {
+  configured: boolean;
+  source: "env" | "app" | null;
+  username: string | null;
+};
+
 export type KofTotals = {
   loads: number;
   revenue: number;
@@ -221,6 +227,13 @@ export type LoadQuery = DateRange & {
 
 export const kof = {
   syncStatus: () => request<KofSyncStatus>("/kof/sync"),
+  connection: () => request<KofConnection>("/kof/connection"),
+  connect: (credentials: { username: string; password: string }) =>
+    request<KofConnection>("/kof/connection", {
+      method: "PUT",
+      body: JSON.stringify(credentials),
+    }),
+  disconnect: () => request<void>("/kof/connection", { method: "DELETE" }),
   startSync: (kind: "incremental" | "full") =>
     request<{ started: boolean }>(`/kof/sync${qs({ kind })}`, { method: "POST" }),
   summary: (range: DateRange, interval: "week" | "month") =>

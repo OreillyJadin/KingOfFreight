@@ -139,7 +139,11 @@ class KofClient:
         }
         data["txt_uname_email"] = self.username
         data["txt_password"] = self.password
-        self._login_post(post_url, data)
+        response = self._login_post(post_url, data)
+        if response.status_code in {401, 403} or self._looks_like_login(
+            response.content
+        ):
+            raise KofLoginError("KOF credentials were rejected")
         self._root_authenticated = True
 
     def _looks_like_login(self, content: bytes) -> bool:

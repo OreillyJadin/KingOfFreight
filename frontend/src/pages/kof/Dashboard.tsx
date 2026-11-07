@@ -8,6 +8,7 @@ import { Card, Tabs } from "../../components/ui";
 import {
   CountCell,
   DataTable,
+  KofConnectionEmptyState,
   Kpi,
   KpiSkeleton,
   MarginCell,
@@ -39,8 +40,23 @@ export default function Dashboard() {
     queryKey: ["kof", "customers", range],
     queryFn: () => kof.customers(range),
   });
+  const connection = useQuery({
+    queryKey: ["kof", "connection"],
+    queryFn: kof.connection,
+    retry: false,
+  });
+  const syncStatus = useQuery({
+    queryKey: ["kof", "sync"],
+    queryFn: kof.syncStatus,
+    retry: false,
+  });
 
   const totals = summary.data?.totals;
+  const showConnectionEmpty =
+    !connection.isPending &&
+    !syncStatus.isPending &&
+    connection.data?.configured === false &&
+    syncStatus.data?.load_count === 0;
 
   function setInterval(next: "week" | "month") {
     const updated = new URLSearchParams(params);
@@ -49,15 +65,26 @@ export default function Dashboard() {
     setParams(updated, { replace: true });
   }
 
+  const heading = (
+    <PageHeading
+      eyebrow="Performance"
+      title="Dashboard"
+      description={`Revenue, carrier cost and margin across your loads. ${label}.`}
+      action={<RangeTabs value={value} onChange={setValue} />}
+    />
+  );
+  if (showConnectionEmpty) {
+    return (
+      <>
+        {heading}
+        <KofConnectionEmptyState />
+      </>
+    );
+  }
+
   return (
     <>
-      <PageHeading
-        eyebrow="Performance"
-        title="Dashboard"
-        description={`Revenue, carrier cost and margin across your loads. ${label}.`}
-        action={<RangeTabs value={value} onChange={setValue} />}
-      />
-
+      {heading}
       <section aria-label="Key figures" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {summary.isPending ? (
           Array.from({ length: 4 }, (_, index) => <KpiSkeleton key={index} />)

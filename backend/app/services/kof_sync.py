@@ -43,6 +43,7 @@ from app.models import (
     KofSyncRun,
     utcnow,
 )
+from app.services.kof_credentials import get_kof_credentials
 
 PAGE_SIZE = 500
 MAX_PAGES = 100
@@ -447,12 +448,14 @@ def sync_with_client(
     return stats
 
 
-def _sync_error_message(error: Exception) -> str:
+def _sync_error_message(error: Exception, password: str | None = None) -> str:
     if isinstance(error, KofLoginError):
-        return str(error)
-    if isinstance(error, KofSiteError):
-        return str(error)
-    return f"Sync failed ({type(error).__name__})"
+        message = str(error)
+    elif isinstance(error, KofSiteError):
+        message = str(error)
+    else:
+        message = f"Sync failed ({type(error).__name__})"
+    return message.replace(password, "[redacted]") if password else message
 
 
 def _execute_sync_run(
@@ -460,11 +463,16 @@ def _execute_sync_run(
 ) -> None:
     started = datetime.now(timezone.utc)
     db = SessionLocal()
+    password = None
     try:
+        credentials = get_kof_credentials(db)
+        if credentials is None:
+            raise ValueError("KOF sync credentials are not configured")
+        username, password, _ = credentials
         settings = get_settings()
         with KofClient(
-            settings.kof_username or "",
-            settings.kof_password or "",
+            username,
+            password,
             settings.kof_base_url,
             capture_dir=capture_dir,
         ) as client:
@@ -484,7 +492,7 @@ def _execute_sync_run(
         if run is not None:
             run.status = "error"
             run.finished_at = datetime.now(timezone.utc)
-            run.error = _sync_error_message(exc)
+            run.error = _sync_error_message(exc, password)
             db.commit()
     finally:
         db.close()
@@ -492,9 +500,9 @@ def _execute_sync_run(
 
 
 def start_sync(kind: str, *, capture_dir: str | Path | None = None) -> int | None:
-    settings = get_settings()
-    if not settings.kof_username or not settings.kof_password:
-        raise ValueError("KOF sync credentials are not configured")
+    with SessionLocal() as credentials_db:
+        if get_kof_credentials(credentials_db) is None:
+            raise ValueError("KOF sync credentials are not configured")
     if not _SYNC_LOCK.acquire(blocking=False):
         return None
     db = SessionLocal()
@@ -537,11 +545,11 @@ def start_sync(kind: str, *, capture_dir: str | Path | None = None) -> int | Non
 
 def run_scheduled_kof_sync() -> None:
     settings = get_settings()
-    if (
-        not settings.kof_sync_enabled
-        or not settings.kof_username
-        or not settings.kof_password
-    ):
+    with SessionLocal() as credentials_db:
+        credentials = get_kof_credentials(credentials_db)
+    if credentials is None:
+        return
+    if credentials[2] == "env" and not settings.kof_sync_enabled:
         return
     now = datetime.now(timezone.utc)
     kind = "incremental"

@@ -20,6 +20,13 @@ function when(value?: string | null) {
 export function KofSyncCard() {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const connection = useQuery({
+    queryKey: ["kof", "connection"],
+    queryFn: kof.connection,
+    retry: false,
+  });
   const status = useQuery({
     queryKey: ["kof", "sync"],
     queryFn: kof.syncStatus,
@@ -31,6 +38,29 @@ export function KofSyncCard() {
     onSuccess: async () => {
       showToast("Sync started.");
       await queryClient.invalidateQueries({ queryKey: ["kof", "sync"] });
+    },
+    onError: (issue: Error) => showToast(issue.message),
+  });
+  const connect = useMutation({
+    mutationFn: () => kof.connect({ username, password }),
+    onSuccess: async () => {
+      setUsername("");
+      setPassword("");
+      showToast("Connected — first full sync takes about 20 minutes");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["kof", "connection"] }),
+        queryClient.invalidateQueries({ queryKey: ["kof", "sync"] }),
+      ]);
+    },
+  });
+  const disconnect = useMutation({
+    mutationFn: kof.disconnect,
+    onSuccess: async () => {
+      showToast("Disconnected from King of Freight.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["kof", "connection"] }),
+        queryClient.invalidateQueries({ queryKey: ["kof", "sync"] }),
+      ]);
     },
     onError: (issue: Error) => showToast(issue.message),
   });
@@ -54,13 +84,80 @@ export function KofSyncCard() {
       </div>
       {status.isError ? (
         <p className="mt-4 text-sm text-danger-ink">{(status.error as Error).message}</p>
-      ) : !data ? null : !data.configured ? (
-        <p className="mt-4 rounded-xl bg-surface-2 px-4 py-3 text-sm text-fg-2">
-          Add <code className="font-mono text-xs">KOF_USERNAME</code>, <code className="font-mono text-xs">KOF_PASSWORD</code> and{" "}
-          <code className="font-mono text-xs">KOF_SYNC_ENABLED=true</code> to the server environment to turn this on.
+      ) : !data || connection.isPending ? null : connection.isError ? (
+        <p role="alert" className="mt-4 text-sm text-danger-ink">
+          {(connection.error as Error).message}
         </p>
+      ) : !connection.data?.configured ? (
+        <div className="mt-4">
+          <h3 className="font-semibold text-fg">Connect King of Freight</h3>
+          <p className="mt-1 text-sm text-muted">
+            Enter your King of Freight login to start syncing your loads.
+          </p>
+          <form
+            className="mt-4 grid gap-3 sm:grid-cols-2"
+            autoComplete="off"
+            onSubmit={(event) => {
+              event.preventDefault();
+              connect.mutate();
+            }}
+          >
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-semibold text-fg-2">Username</span>
+              <Input
+                autoComplete="off"
+                required
+                value={username}
+                onChange={(event) => setUsername(event.target.value)}
+              />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-sm font-semibold text-fg-2">Password</span>
+              <Input
+                type="password"
+                autoComplete="new-password"
+                required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+            </label>
+            {connect.isError && (
+              <p role="alert" className="text-sm text-danger-ink sm:col-span-2">
+                {(connect.error as Error).message}
+              </p>
+            )}
+            <div className="sm:col-span-2">
+              <Button type="submit" variant="primary" loading={connect.isPending} full>
+                Connect
+              </Button>
+            </div>
+          </form>
+        </div>
       ) : (
         <>
+          {connection.data?.source === "app" && (
+            <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl bg-surface-2 px-4 py-3">
+              <p className="min-w-0 truncate text-sm text-fg-2">
+                Connected as <span className="font-semibold text-fg">{connection.data.username}</span>
+              </p>
+              <Button
+                variant="secondary"
+                loading={disconnect.isPending}
+                onClick={() => {
+                  if (window.confirm("Disconnect your King of Freight account?")) {
+                    disconnect.mutate();
+                  }
+                }}
+              >
+                Disconnect
+              </Button>
+            </div>
+          )}
+          {connection.data?.source === "env" && (
+            <p className="mt-4 rounded-xl bg-surface-2 px-4 py-3 text-sm text-fg-2">
+              Configured on the server
+            </p>
+          )}
           <dl className="mt-4 grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl bg-surface-2 px-3 py-2">
               <dt className="text-[11px] font-bold uppercase tracking-[0.12em] text-muted">Loads synced</dt>

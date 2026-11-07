@@ -6,7 +6,13 @@ import { kof, type KofLoadRow } from "../../kof/api";
 import { ErrorState, PageHeading } from "../../components/common";
 import { ListDetail } from "../../components/ListDetail";
 import { Badge, Button, Card, Input, Select, Skeleton } from "../../components/ui";
-import { DataTable, MarginCell, MoneyCell, TableSkeleton } from "../../kof/components";
+import {
+  DataTable,
+  KofConnectionEmptyState,
+  MarginCell,
+  MoneyCell,
+  TableSkeleton,
+} from "../../kof/components";
 import { money, place, shortDate, stageClass, stageLabels, stageOrder } from "../../kof/format";
 
 const PAGE_SIZE = 50;
@@ -149,6 +155,16 @@ export default function Loads() {
         sort: "-date_of_sale",
       }),
   });
+  const connection = useQuery({
+    queryKey: ["kof", "connection"],
+    queryFn: kof.connection,
+    retry: false,
+  });
+  const syncStatus = useQuery({
+    queryKey: ["kof", "sync"],
+    queryFn: kof.syncStatus,
+    retry: false,
+  });
 
   function update(changes: Record<string, string | null>) {
     const updated = new URLSearchParams(params);
@@ -160,6 +176,11 @@ export default function Loads() {
   }
 
   const total = loads.data?.total ?? 0;
+  const showConnectionEmpty =
+    !connection.isPending &&
+    !syncStatus.isPending &&
+    connection.data?.configured === false &&
+    syncStatus.data?.load_count === 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   const list = (
@@ -252,14 +273,25 @@ export default function Loads() {
     </Card>
   );
 
+  const heading = (
+    <PageHeading
+      eyebrow="History"
+      title="Loads"
+      description="Every load synced from King of Freight, searchable with full detail."
+    />
+  );
+  if (showConnectionEmpty) {
+    return (
+      <>
+        {heading}
+        <KofConnectionEmptyState />
+      </>
+    );
+  }
+
   return (
     <>
-      <PageHeading
-        eyebrow="History"
-        title="Loads"
-        description="Every load synced from King of Freight, searchable with full detail."
-      />
-
+      {heading}
       <form
         className="mb-4 flex flex-wrap gap-2.5"
         onSubmit={(event) => {

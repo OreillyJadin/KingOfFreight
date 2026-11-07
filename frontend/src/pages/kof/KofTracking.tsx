@@ -5,6 +5,7 @@ import { AlertTriangle, Radar } from "lucide-react";
 import { kof, type KofTrackingLoad } from "../../kof/api";
 import { EmptyState, ErrorState, PageHeading } from "../../components/common";
 import { Badge, Button, Card, CardListSkeleton } from "../../components/ui";
+import { KofConnectionEmptyState } from "../../kof/components";
 import { money, place, relativeHours, shortDate, stageClass } from "../../kof/format";
 
 function LoadCard({ load }: { load: KofTrackingLoad }) {
@@ -73,6 +74,16 @@ export default function KofTracking() {
     queryFn: kof.tracking,
     refetchInterval: 120000,
   });
+  const connection = useQuery({
+    queryKey: ["kof", "connection"],
+    queryFn: kof.connection,
+    retry: false,
+  });
+  const syncStatus = useQuery({
+    queryKey: ["kof", "sync"],
+    queryFn: kof.syncStatus,
+    retry: false,
+  });
 
   const stages = (tracking.data?.stages ?? []).map((stage) => ({
     ...stage,
@@ -83,6 +94,8 @@ export default function KofTracking() {
     (sum, stage) => sum + stage.loads.filter((load) => load.late).length,
     0,
   );
+  const showConnectionEmpty =
+    connection.data?.configured === false && syncStatus.data?.load_count === 0;
 
   function toggleLate() {
     const updated = new URLSearchParams(params);
@@ -109,8 +122,10 @@ export default function KofTracking() {
         <ErrorState message={(tracking.error as Error).message} onRetry={() => tracking.refetch()} />
       )}
 
-      {tracking.isPending ? (
+      {tracking.isPending || connection.isPending || syncStatus.isPending ? (
         <CardListSkeleton count={4} />
+      ) : showConnectionEmpty ? (
+        <KofConnectionEmptyState />
       ) : total === 0 ? (
         <EmptyState
           icon={Radar}

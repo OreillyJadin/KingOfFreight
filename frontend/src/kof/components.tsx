@@ -1,6 +1,24 @@
 import { useId, type ReactNode } from "react";
-import { Card, Skeleton } from "../components/ui";
+import { Link } from "react-router-dom";
+import { Radar } from "lucide-react";
+import { EmptyState } from "../components/common";
+import { buttonClass, Card, Skeleton } from "../components/ui";
 import { compactMoney, count, money, pct } from "./format";
+
+export function KofConnectionEmptyState() {
+  return (
+    <EmptyState
+      icon={Radar}
+      title="Connect King of Freight to see your loads"
+      description="Connect your King of Freight account in Settings to start syncing loads."
+      action={
+        <Link to="/settings" className={buttonClass("primary")}>
+          Open Settings
+        </Link>
+      }
+    />
+  );
+}
 
 export function Kpi({
   label,
