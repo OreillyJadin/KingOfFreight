@@ -27,7 +27,7 @@ def test_bootstrap_login_password_setup_gating_and_session_invalidation(
 
             login = client.post(
                 "/api/auth/login",
-                json={"username": "keaster", "password": "test-password"},
+                json={"username": "keaster", "password": ""},
             )
             assert login.status_code == 200
             assert login.json() == {
@@ -66,6 +66,20 @@ def test_bootstrap_login_password_setup_gating_and_session_invalidation(
             assert setup.status_code == 200
             assert setup.json() == {"ok": True}
             assert client.get("/api/loads").status_code == 200
+            assert client.post("/api/auth/logout").status_code == 200
+            empty_password_login = client.post(
+                "/api/auth/login",
+                json={"username": "Keaster", "password": ""},
+            )
+            assert empty_password_login.status_code == 401
+            personal_login = client.post(
+                "/api/auth/login",
+                json={
+                    "username": "Keaster",
+                    "password": "first-personal-password",
+                },
+            )
+            assert personal_login.status_code == 200
 
             with TestClient(app) as stale_session:
                 stale_session.cookies.set(COOKIE_NAME, old_cookie)
@@ -105,6 +119,28 @@ def test_bootstrap_login_password_setup_gating_and_session_invalidation(
                 "username": None,
                 "must_set_password": False,
             }
+
+            db.add(
+                User(
+                    username="OtherUser",
+                    password_hash=None,
+                    password_version=0,
+                    must_set_password=True,
+                )
+            )
+            db.commit()
+            client.post("/api/auth/logout")
+            non_bootstrap_empty_login = client.post(
+                "/api/auth/login",
+                json={"username": "OtherUser", "password": ""},
+            )
+            assert non_bootstrap_empty_login.status_code == 401
+            non_bootstrap_broker_login = client.post(
+                "/api/auth/login",
+                json={"username": "OtherUser", "password": "test-password"},
+            )
+            assert non_bootstrap_broker_login.status_code == 200
+            assert non_bootstrap_broker_login.json()["must_set_password"] is True
     finally:
         get_settings.cache_clear()
 
@@ -125,3 +161,34 @@ def test_bootstrap_ignores_existing_case_insensitive_username(db):
     assert existing is not None
     assert existing.id == original.id
     assert db.scalar(select(User).where(User.username == "keaster")) is None
+
+
+def test_bootstrap_login_matches_configured_username_case_insensitively(
+    db, monkeypatch
+):
+    import app.main as main_module
+
+    monkeypatch.setenv("BOOTSTRAP_USERNAME", "keaster")
+    monkeypatch.setenv("SCHEDULER_ENABLED", "false")
+    get_settings.cache_clear()
+    settings = get_settings()
+    monkeypatch.setattr(main_module, "settings", settings)
+    db.add(
+        User(
+            username="Keaster",
+            password_hash=None,
+            password_version=0,
+            must_set_password=True,
+        )
+    )
+    db.commit()
+    try:
+        with TestClient(main_module.app) as client:
+            response = client.post(
+                "/api/auth/login",
+                json={"username": "KEASTER", "password": "anything"},
+            )
+            assert response.status_code == 200
+            assert response.json()["must_set_password"] is True
+    finally:
+        get_settings.cache_clear()

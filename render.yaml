@@ -22,7 +22,7 @@ services:
       - key: BROKER_PASSWORD
         sync: false
       - key: BOOTSTRAP_USERNAME
-        sync: false
+        value: Keaster
       - key: ENV
         value: production
       # Legacy: only read by the BOL-to-Postgres migration on first deploy of this version; safe to remove afterwards.
