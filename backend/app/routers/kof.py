@@ -22,7 +22,7 @@ from app.auth import require_broker
 from app.config import get_settings
 from app.db import get_db
 from app.integrations.kof.parser import parse_time, strip_more_suffix
-from app.models import KofListSnapshot, KofLoad, KofSyncRun
+from app.models import KofBranch, KofListSnapshot, KofLoad, KofSyncRun
 from app.services.kof_sync import start_sync
 
 router = APIRouter(
@@ -318,27 +318,25 @@ def _lane_expressions(level: str):
             func.coalesce(KofLoad.origin_state, "Unknown"),
             func.coalesce(KofLoad.dest_state, "Unknown"),
         )
+    origin_city = func.nullif(func.lower(func.trim(KofLoad.origin_city)), "")
+    origin_state = func.nullif(func.upper(func.trim(KofLoad.origin_state)), "")
+    dest_city = func.nullif(func.lower(func.trim(KofLoad.dest_city)), "")
+    dest_state = func.nullif(func.upper(func.trim(KofLoad.dest_state)), "")
     origin = case(
         (
-            and_(
-                KofLoad.origin_city.is_not(None),
-                KofLoad.origin_state.is_not(None),
-            ),
-            KofLoad.origin_city + literal(", ") + KofLoad.origin_state,
+            and_(origin_city.is_not(None), origin_state.is_not(None)),
+            origin_city + literal(", ") + origin_state,
         ),
-        (KofLoad.origin_city.is_not(None), KofLoad.origin_city),
-        else_=func.coalesce(KofLoad.origin_state, "Unknown"),
+        (origin_city.is_not(None), origin_city),
+        else_=func.coalesce(origin_state, "Unknown"),
     )
     destination = case(
         (
-            and_(
-                KofLoad.dest_city.is_not(None),
-                KofLoad.dest_state.is_not(None),
-            ),
-            KofLoad.dest_city + literal(", ") + KofLoad.dest_state,
+            and_(dest_city.is_not(None), dest_state.is_not(None)),
+            dest_city + literal(", ") + dest_state,
         ),
-        (KofLoad.dest_city.is_not(None), KofLoad.dest_city),
-        else_=func.coalesce(KofLoad.dest_state, "Unknown"),
+        (dest_city.is_not(None), dest_city),
+        else_=func.coalesce(dest_state, "Unknown"),
     )
     return origin, destination
 
@@ -350,6 +348,182 @@ def _known_lane_filters() -> list:
         KofLoad.dest_state.is_not(None),
         func.lower(func.trim(KofLoad.origin_state)).notin_(unknown_states),
         func.lower(func.trim(KofLoad.dest_state)).notin_(unknown_states),
+    ]
+
+
+def _format_city_label(value: str | None) -> str | None:
+    if value is None:
+        return None
+    value = value.strip()
+    if re.fullmatch(r"[A-Za-z]{2}", value):
+        return value.upper()
+    city, separator, state = value.rpartition(",")
+    if separator and re.fullmatch(r"\s*[A-Za-z]{2}\s*", state):
+        return f"{city.strip().title()}, {state.strip().upper()}"
+    return value.title()
+
+
+def _branch_text(raw: dict, key: str) -> str | None:
+    value = raw.get(key)
+    if value is None:
+        return None
+    value = str(value).strip()
+    return value or None
+
+
+def _parse_branch_label(label: str) -> tuple[str | None, str | None]:
+    normalized = label.strip().upper()
+    normalized = re.sub(r"\s+(?:-\s*)?(?:[A-Z]{1,2})?\d{1,3}$", "", normalized)
+    match = re.search(r"(?:,\s*|\s+)([A-Z]{2})$", normalized)
+    if not match:
+        return None, None
+    city = normalized[: match.start()].strip(" ,")
+    city = re.sub(r"^[A-Z]{1,2}\d{1,3}\s+", "", city)
+    return city.title() or None, match.group(1)
+
+
+def _matching_branch_raw(
+    branches: list[KofBranch], label: str, customer: str | None
+) -> dict:
+    for branch in branches:
+        raw = branch.raw if isinstance(branch.raw, dict) else {}
+        if _branch_text(raw, "Branch No. / Loc.") != label:
+            continue
+        company = _branch_text(raw, "Company")
+        if (
+            company
+            and customer
+            and not customer.strip().casefold().startswith(company.casefold())
+        ):
+            continue
+        if company and not customer:
+            continue
+        return raw
+    return {}
+
+
+def _branch_location(label: str, raw: dict) -> tuple[str | None, str | None]:
+    parsed_city, parsed_state = _parse_branch_label(label)
+    city = _branch_text(raw, "City") or parsed_city
+    state = _branch_text(raw, "State/Province") or parsed_state
+    return (
+        _format_city_label(city),
+        state.upper() if state else None,
+    )
+
+
+def _branch_contact(raw: dict) -> dict | None:
+    first = _branch_text(raw, "First Name")
+    last = _branch_text(raw, "Last Name")
+    contact = {
+        "name": " ".join(part for part in (first, last) if part) or None,
+        "phone": _branch_text(raw, "Business Phone")
+        or _branch_text(raw, "Mobile Phone"),
+        "email": _branch_text(raw, "E-mail Address"),
+        "address": _branch_text(raw, "Address"),
+    }
+    return contact if any(contact.values()) else None
+
+
+def _customer_prefix_filter(customer: str):
+    return func.lower(func.trim(KofLoad.customer)).startswith(
+        customer.strip().casefold(), autoescape=True
+    )
+
+
+def _lane_filters(
+    start: date | None,
+    end: date | None,
+    branch: str | None,
+    customer: str | None,
+    origin_city: str | None,
+) -> list:
+    _, _, filters = _date_filters(start, end)
+    if branch and branch.strip():
+        filters.append(KofLoad.branch == branch.strip())
+    if customer and customer.strip():
+        filters.append(_customer_prefix_filter(customer))
+    if origin_city and origin_city.strip():
+        filters.append(
+            func.lower(func.trim(KofLoad.origin_city)) == origin_city.strip().casefold()
+        )
+    return filters
+
+
+def _lane_metrics(
+    db: Session,
+    filters: list,
+    level: str,
+    *,
+    min_loads: int = 1,
+    limit: int | None = None,
+) -> list[dict]:
+    lane_filters = [*filters, *_known_lane_filters()]
+    origin, destination = _lane_expressions(level)
+    metrics_query = (
+        select(
+            origin.label("origin"),
+            destination.label("destination"),
+            func.count(KofLoad.order_no),
+            func.avg(KofLoad.price),
+            func.avg(KofLoad.cost),
+            func.avg(KofLoad.profit),
+            _margin_expression(),
+            func.min(KofLoad.cost),
+            func.max(KofLoad.cost),
+        )
+        .where(*lane_filters)
+        .group_by(origin, destination)
+        .having(func.count(KofLoad.order_no) >= min_loads)
+        .order_by(func.count(KofLoad.order_no).desc(), origin, destination)
+    )
+    if limit is not None:
+        metrics_query = metrics_query.limit(limit)
+    metrics = db.execute(metrics_query).all()
+    ranked = (
+        select(
+            origin.label("origin"),
+            destination.label("destination"),
+            KofLoad.cost.label("last_cost"),
+            KofLoad.date_of_sale.label("last_date"),
+            func.row_number()
+            .over(
+                partition_by=(origin, destination),
+                order_by=(KofLoad.date_of_sale.desc(), KofLoad.order_no.desc()),
+            )
+            .label("position"),
+        )
+        .where(*lane_filters)
+        .subquery()
+    )
+    last_rows = db.execute(
+        select(
+            ranked.c.origin,
+            ranked.c.destination,
+            ranked.c.last_cost,
+            ranked.c.last_date,
+        ).where(ranked.c.position == 1)
+    ).all()
+    last_by_lane = {(row[0], row[1]): (row[2], row[3]) for row in last_rows}
+    return [
+        {
+            "origin": _format_city_label(row[0]) if level == "city" else row[0],
+            "destination": (_format_city_label(row[1]) if level == "city" else row[1]),
+            "loads": int(row[2] or 0),
+            "avg_price": _number(row[3]),
+            "avg_cost": _number(row[4]),
+            "avg_profit": _number(row[5]),
+            "margin_pct": _number(row[6]),
+            "min_cost": _number(row[7]),
+            "max_cost": _number(row[8]),
+            "last_cost": _number(last_by_lane.get((row[0], row[1]), (None, None))[0]),
+            "last_date": (
+                last_by_lane[(row[0], row[1])][1].isoformat()
+                if last_by_lane.get((row[0], row[1]), (None, None))[1]
+                else None
+            ),
+        }
+        for row in metrics
     ]
 
 
@@ -536,74 +710,221 @@ def lanes(
     level: Literal["state", "city"] = "state",
     min_loads: int = Query(default=1, ge=1),
     limit: int = Query(default=100, ge=1, le=500),
+    branch: str | None = None,
+    customer: str | None = None,
+    origin_city: str | None = None,
+    db: Session = Depends(get_db),
+) -> list[dict]:
+    filters = _lane_filters(start, end, branch, customer, origin_city)
+    return _lane_metrics(db, filters, level, min_loads=min_loads, limit=limit)
+
+
+@router.get("/branches")
+def branches(
+    start: date | None = None,
+    end: date | None = None,
+    customer: str | None = "united rentals",
     db: Session = Depends(get_db),
 ) -> list[dict]:
     _, _, filters = _date_filters(start, end)
-    filters.extend(_known_lane_filters())
-    origin, destination = _lane_expressions(level)
-    metrics = db.execute(
+    filters.extend(
+        [
+            KofLoad.branch.is_not(None),
+            func.trim(KofLoad.branch) != "",
+        ]
+    )
+    if customer and customer.strip():
+        filters.append(_customer_prefix_filter(customer))
+    rows = db.execute(
         select(
-            origin.label("origin"),
-            destination.label("destination"),
+            KofLoad.branch,
+            KofLoad.customer,
             func.count(KofLoad.order_no),
+            func.sum(KofLoad.price),
+            func.sum(KofLoad.cost),
+            func.sum(KofLoad.profit),
+            _margin_expression(),
             func.avg(KofLoad.price),
             func.avg(KofLoad.cost),
-            func.avg(KofLoad.profit),
-            _margin_expression(),
-            func.min(KofLoad.cost),
-            func.max(KofLoad.cost),
+            func.max(KofLoad.date_of_sale),
         )
         .where(*filters)
-        .group_by(origin, destination)
-        .having(func.count(KofLoad.order_no) >= min_loads)
-        .order_by(func.count(KofLoad.order_no).desc(), origin, destination)
-        .limit(limit)
+        .group_by(KofLoad.branch, KofLoad.customer)
+        .order_by(func.count(KofLoad.order_no).desc(), KofLoad.branch, KofLoad.customer)
     ).all()
-    ranked = (
+
+    origin, destination = _lane_expressions("city")
+    load_count = func.count(KofLoad.order_no)
+    ranked_lanes = (
         select(
+            KofLoad.branch.label("branch"),
+            KofLoad.customer.label("customer"),
             origin.label("origin"),
             destination.label("destination"),
-            KofLoad.cost.label("last_cost"),
-            KofLoad.date_of_sale.label("last_date"),
+            load_count.label("loads"),
             func.row_number()
             .over(
-                partition_by=(origin, destination),
-                order_by=(KofLoad.date_of_sale.desc(), KofLoad.order_no.desc()),
+                partition_by=(KofLoad.branch, KofLoad.customer),
+                order_by=(load_count.desc(), origin, destination),
             )
             .label("position"),
         )
-        .where(*filters)
+        .where(*filters, *_known_lane_filters())
+        .group_by(KofLoad.branch, KofLoad.customer, origin, destination)
         .subquery()
     )
-    last_rows = db.execute(
+    lane_rows = db.execute(
         select(
-            ranked.c.origin,
-            ranked.c.destination,
-            ranked.c.last_cost,
-            ranked.c.last_date,
-        ).where(ranked.c.position == 1)
+            ranked_lanes.c.branch,
+            ranked_lanes.c.customer,
+            ranked_lanes.c.origin,
+            ranked_lanes.c.destination,
+        )
+        .where(ranked_lanes.c.position <= 3)
+        .order_by(
+            ranked_lanes.c.branch,
+            ranked_lanes.c.customer,
+            ranked_lanes.c.position,
+        )
     ).all()
-    last_by_lane = {(row[0], row[1]): (row[2], row[3]) for row in last_rows}
-    return [
-        {
-            "origin": row[0],
-            "destination": row[1],
-            "loads": int(row[2] or 0),
-            "avg_price": _number(row[3]),
-            "avg_cost": _number(row[4]),
-            "avg_profit": _number(row[5]),
-            "margin_pct": _number(row[6]),
-            "min_cost": _number(row[7]),
-            "max_cost": _number(row[8]),
-            "last_cost": _number(last_by_lane.get((row[0], row[1]), (None, None))[0]),
-            "last_date": (
-                last_by_lane[(row[0], row[1])][1].isoformat()
-                if last_by_lane.get((row[0], row[1]), (None, None))[1]
-                else None
-            ),
-        }
-        for row in metrics
+    top_lanes: dict[tuple[str, str | None], list[str]] = defaultdict(list)
+    for row in lane_rows:
+        top_lanes[(row[0], row[1])].append(
+            f"{_format_city_label(row[2])} → {_format_city_label(row[3])}"
+        )
+
+    branch_records = db.scalars(select(KofBranch)).all()
+    results = []
+    for row in rows:
+        label, load_customer = row[0], row[1]
+        raw = _matching_branch_raw(branch_records, label, load_customer)
+        city, state = _branch_location(label, raw)
+        results.append(
+            {
+                "branch": label,
+                "customer": load_customer,
+                "city": city,
+                "state": state,
+                "loads": int(row[2] or 0),
+                "revenue": _number(row[3]) or 0,
+                "cost": _number(row[4]) or 0,
+                "profit": _number(row[5]) or 0,
+                "margin_pct": _number(row[6]),
+                "avg_price": _number(row[7]),
+                "avg_cost": _number(row[8]),
+                "last_load_date": row[9].isoformat() if row[9] else None,
+                "top_lanes": top_lanes.get((label, load_customer), []),
+                "working_status": _branch_text(raw, "Are We Working With This Branch"),
+            }
+        )
+    return results
+
+
+@router.get("/branches/detail")
+def branch_detail(
+    branch: str = Query(min_length=1),
+    start: date | None = None,
+    end: date | None = None,
+    db: Session = Depends(get_db),
+) -> dict:
+    _, _, filters = _date_filters(start, end)
+    filters.append(KofLoad.branch == branch)
+    totals_row = db.execute(
+        select(
+            func.count(KofLoad.order_no),
+            func.sum(KofLoad.price),
+            func.sum(KofLoad.cost),
+            func.sum(KofLoad.profit),
+            _margin_expression(),
+            func.avg(KofLoad.price),
+            func.avg(KofLoad.cost),
+        ).where(*filters)
+    ).one()
+    if not totals_row[0]:
+        raise HTTPException(status_code=404, detail="Branch not found")
+    customer_row = db.execute(
+        select(KofLoad.customer, func.count(KofLoad.order_no))
+        .where(*filters, KofLoad.customer.is_not(None))
+        .group_by(KofLoad.customer)
+        .order_by(func.count(KofLoad.order_no).desc(), KofLoad.customer)
+        .limit(1)
+    ).first()
+    load_customer = customer_row[0] if customer_row else None
+    branch_records = db.scalars(select(KofBranch)).all()
+    raw = _matching_branch_raw(branch_records, branch, load_customer)
+    city, state = _branch_location(branch, raw)
+
+    pickup_filters = [
+        *filters,
+        KofLoad.shipper_company.is_not(None),
+        KofLoad.shipper_city.is_not(None),
+        KofLoad.shipper_state.is_not(None),
+        func.trim(KofLoad.shipper_company) != "",
+        func.trim(KofLoad.shipper_city) != "",
+        func.trim(KofLoad.shipper_state) != "",
     ]
+    pickup_rows = db.execute(
+        select(
+            KofLoad.shipper_company,
+            KofLoad.shipper_city,
+            KofLoad.shipper_state,
+            func.count(KofLoad.order_no),
+            func.avg(KofLoad.price),
+            func.avg(KofLoad.cost),
+            _margin_expression(),
+            func.max(KofLoad.date_of_sale),
+        )
+        .where(*pickup_filters)
+        .group_by(
+            KofLoad.shipper_company,
+            KofLoad.shipper_city,
+            KofLoad.shipper_state,
+        )
+        .order_by(
+            func.count(KofLoad.order_no).desc(),
+            KofLoad.shipper_city,
+            KofLoad.shipper_state,
+            KofLoad.shipper_company,
+        )
+    ).all()
+    recent_loads = db.scalars(
+        select(KofLoad)
+        .where(*filters)
+        .order_by(KofLoad.date_of_sale.desc(), KofLoad.order_no.desc())
+        .limit(10)
+    ).all()
+    return {
+        "branch": branch,
+        "customer": load_customer,
+        "city": city,
+        "state": state,
+        "contact": _branch_contact(raw),
+        "working_status": _branch_text(raw, "Are We Working With This Branch"),
+        "totals": {
+            "loads": int(totals_row[0] or 0),
+            "revenue": _number(totals_row[1]) or 0,
+            "cost": _number(totals_row[2]) or 0,
+            "profit": _number(totals_row[3]) or 0,
+            "margin_pct": _number(totals_row[4]),
+            "avg_price": _number(totals_row[5]),
+            "avg_cost": _number(totals_row[6]),
+        },
+        "lanes": _lane_metrics(db, filters, "city"),
+        "pickup_sites": [
+            {
+                "company": row[0],
+                "city": _format_city_label(row[1]),
+                "state": row[2].upper(),
+                "loads": int(row[3] or 0),
+                "avg_price": _number(row[4]),
+                "avg_cost": _number(row[5]),
+                "margin_pct": _number(row[6]),
+                "last_date": row[7].isoformat() if row[7] else None,
+            }
+            for row in pickup_rows
+        ],
+        "recent_loads": [_load_row(load) for load in recent_loads],
+    }
 
 
 @router.get("/customers")
@@ -682,7 +1003,7 @@ def carriers(
     top_lanes: dict[tuple[str, str | None], list[str]] = defaultdict(list)
     for row in lane_rows:
         key = (row[0], row[1])
-        lane = f"{row[2]} → {row[3]}"
+        lane = f"{_format_city_label(row[2])} → {_format_city_label(row[3])}"
         if lane not in top_lanes[key] and len(top_lanes[key]) < 3:
             top_lanes[key].append(lane)
     return [

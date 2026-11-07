@@ -21,7 +21,7 @@ from app.integrations.kof.parser import (
     parse_time,
     strip_more_suffix,
 )
-from app.models import KofListSnapshot, KofLoad, KofSyncRun
+from app.models import KofBranch, KofListSnapshot, KofLoad, KofSyncRun
 from app.routers.kof import _parse_note_entries
 from app.services.kof_sync import (
     SyncStats,
@@ -993,6 +993,282 @@ def test_loads_sort_descending_places_null_dates_last(client, db):
         700801,
         700803,
     ]
+
+
+@pytest.mark.parametrize(
+    ("label", "expected"),
+    (
+        ("PINE VALLEY, MN", ("Pine Valley", "MN")),
+        ("Arlington TX - 1", ("Arlington", "TX")),
+        ("NORTH VALLEY, TX H73", ("North Valley", "TX")),
+        ("G09 SAMPLE CITY, MO", ("Sample City", "MO")),
+    ),
+)
+def test_branch_label_location_parsing(label, expected):
+    from app.routers.kof import _parse_branch_label
+
+    assert _parse_branch_label(label) == expected
+
+
+def test_branch_analytics_endpoints_use_metadata_and_exclude_deleted_loads(client, db):
+    today = date.today()
+    metadata_label = "G09 SAMPLE CITY, MO"
+    fallback_label = "G09 RIVER CITY, MN"
+
+    def add_load(
+        order_no,
+        *,
+        branch,
+        customer="United Rentals - Austin",
+        sale_date=today,
+        price,
+        cost,
+        profit,
+        shipper_company,
+        shipper_city,
+        is_deleted=False,
+    ):
+        load = _seed_kof_load(
+            db,
+            order_no=order_no,
+            date_of_sale=sale_date,
+            customer=customer,
+            carrier="Synthetic Carrier",
+            stage="booked",
+            price=Decimal(str(price)),
+            cost=Decimal(str(cost)),
+            profit=Decimal(str(profit)),
+            is_deleted=is_deleted,
+        )
+        load.branch = branch
+        load.origin_city = "Austin"
+        load.origin_state = "TX"
+        load.dest_city = "Houston"
+        load.dest_state = "TX"
+        load.shipper_company = shipper_company
+        load.shipper_city = shipper_city
+        load.shipper_state = "TX"
+
+    add_load(
+        700921,
+        branch=metadata_label,
+        sale_date=today - timedelta(days=1),
+        price=100,
+        cost=70,
+        profit=30,
+        shipper_company="Demo Yard",
+        shipper_city="Austin",
+    )
+    add_load(
+        700922,
+        branch=metadata_label,
+        price=200,
+        cost=120,
+        profit=80,
+        shipper_company="Synthetic Job Site",
+        shipper_city="Round Rock",
+    )
+    add_load(
+        700923,
+        branch=fallback_label,
+        price=300,
+        cost=210,
+        profit=90,
+        shipper_company="Demo Warehouse",
+        shipper_city="Dallas",
+    )
+    add_load(
+        700924,
+        branch="Independent Branch",
+        customer="Other Customer",
+        price=400,
+        cost=300,
+        profit=100,
+        shipper_company="Other Site",
+        shipper_city="Dallas",
+    )
+    add_load(
+        700925,
+        branch=metadata_label,
+        price=900,
+        cost=800,
+        profit=100,
+        shipper_company="Deleted Site",
+        shipper_city="Austin",
+        is_deleted=True,
+    )
+    add_load(
+        700926,
+        branch=metadata_label,
+        sale_date=today - timedelta(days=10),
+        price=500,
+        cost=400,
+        profit=100,
+        shipper_company="Old Site",
+        shipper_city="Austin",
+    )
+    db.add(
+        KofBranch(
+            branch_key=metadata_label,
+            name=metadata_label,
+            raw={
+                "Branch No. / Loc.": metadata_label,
+                "Company": "United Rentals",
+                "City": "Austin",
+                "State/Province": "TX",
+                "Address": "100 Synthetic Road",
+                "First Name": "Demo",
+                "Last Name": "Contact",
+                "Business Phone": "555-0100",
+                "Mobile Phone": "555-0101",
+                "E-mail Address": "demo@example.test",
+                "Are We Working With This Branch": "Working",
+            },
+        )
+    )
+    db.commit()
+
+    date_query = f"start={today - timedelta(days=5)}&end={today}"
+    response = client.get(f"/api/kof/branches?{date_query}&customer=UNITED%20RENTALS")
+
+    assert response.status_code == 200, response.text
+    branches = response.json()
+    assert len(branches) == 2
+    assert set(branches[0]) == {
+        "branch",
+        "customer",
+        "city",
+        "state",
+        "loads",
+        "revenue",
+        "cost",
+        "profit",
+        "margin_pct",
+        "avg_price",
+        "avg_cost",
+        "last_load_date",
+        "top_lanes",
+        "working_status",
+    }
+    metadata_branch = next(
+        item for item in branches if item["branch"] == metadata_label
+    )
+    assert (metadata_branch["city"], metadata_branch["state"]) == ("Austin", "TX")
+    assert metadata_branch["loads"] == 2
+    assert metadata_branch["revenue"] == 300
+    assert metadata_branch["cost"] == 190
+    assert metadata_branch["profit"] == 110
+    assert metadata_branch["margin_pct"] == 36.67
+    assert metadata_branch["avg_price"] == 150
+    assert metadata_branch["avg_cost"] == 95
+    assert metadata_branch["top_lanes"] == ["Austin, TX → Houston, TX"]
+    assert metadata_branch["working_status"] == "Working"
+    fallback_branch = next(
+        item for item in branches if item["branch"] == fallback_label
+    )
+    assert (fallback_branch["city"], fallback_branch["state"]) == (
+        "River City",
+        "MN",
+    )
+
+    detail = client.get(
+        f"/api/kof/branches/detail?branch={metadata_label}&{date_query}"
+    )
+    assert detail.status_code == 200, detail.text
+    detail_body = detail.json()
+    assert set(detail_body) == {
+        "branch",
+        "customer",
+        "city",
+        "state",
+        "contact",
+        "working_status",
+        "totals",
+        "lanes",
+        "pickup_sites",
+        "recent_loads",
+    }
+    assert detail_body["contact"] == {
+        "name": "Demo Contact",
+        "phone": "555-0100",
+        "email": "demo@example.test",
+        "address": "100 Synthetic Road",
+    }
+    assert detail_body["totals"] == {
+        "loads": 2,
+        "revenue": 300,
+        "cost": 190,
+        "profit": 110,
+        "margin_pct": 36.67,
+        "avg_price": 150,
+        "avg_cost": 95,
+    }
+    assert len(detail_body["lanes"]) == 1
+    assert (
+        detail_body["lanes"][0]["origin"],
+        detail_body["lanes"][0]["destination"],
+        detail_body["lanes"][0]["loads"],
+    ) == ("Austin, TX", "Houston, TX", 2)
+    assert [
+        (site["company"], site["city"], site["state"], site["loads"], site["avg_price"])
+        for site in detail_body["pickup_sites"]
+    ] == [
+        ("Demo Yard", "Austin", "TX", 1, 100),
+        ("Synthetic Job Site", "Round Rock", "TX", 1, 200),
+    ]
+    assert [load["order_no"] for load in detail_body["recent_loads"]] == [
+        700922,
+        700921,
+    ]
+
+    all_customers = client.get(f"/api/kof/branches?{date_query}&customer=")
+    assert all_customers.status_code == 200
+    assert {item["customer"] for item in all_customers.json()} == {
+        "United Rentals - Austin",
+        "Other Customer",
+    }
+
+
+def test_lanes_filter_by_branch_customer_and_exact_origin_city(client, db):
+    today = date.today()
+    for order_no, branch, customer, city, is_deleted in (
+        (700931, "Demo Branch", "United Rentals East", "austin", False),
+        (700932, "Demo Branch", "United Rentals East", "Austin", False),
+        (700933, "Other Branch", "United Rentals West", "Austin", False),
+        (700934, "Demo Branch", "United Rentals East", "Austin Heights", False),
+        (700935, "Demo Branch", "United Rentals East", "Austin", True),
+    ):
+        load = _seed_kof_load(
+            db,
+            order_no=order_no,
+            date_of_sale=today,
+            customer=customer,
+            carrier="Synthetic Carrier",
+            stage="booked",
+            price=Decimal("100.00"),
+            cost=Decimal("70.00"),
+            profit=Decimal("30.00"),
+            city=city,
+            state="TX",
+            dest_state="TX",
+            is_deleted=is_deleted,
+        )
+        load.branch = branch
+        load.dest_city = "Houston"
+    db.commit()
+
+    response = client.get(
+        "/api/kof/lanes?level=city&min_loads=1"
+        "&branch=Demo%20Branch&customer=UNITED%20RENTALS&origin_city=AuStIn"
+    )
+
+    assert response.status_code == 200, response.text
+    assert len(response.json()) == 1
+    assert (response.json()[0]["origin"], response.json()[0]["destination"]) == (
+        "Austin, TX",
+        "Houston, TX",
+    )
+    assert response.json()[0]["loads"] == 2
 
 
 def test_lanes_and_carrier_top_lanes_exclude_unknown_states(client, db):
