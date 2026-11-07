@@ -97,6 +97,7 @@ export type KofTotals = {
 
 export type KofSummary = {
   totals: KofTotals;
+  undated_loads: number;
   series: { period: string; loads: number; revenue: number; cost: number; profit: number; margin_pct: number | null }[];
   by_equipment: { equipment: string | null; loads: number; avg_price: number | null; avg_cost: number | null; margin_pct: number | null }[];
 };

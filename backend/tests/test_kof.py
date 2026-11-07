@@ -745,6 +745,29 @@ def test_kof_api_contract_shapes(client, db, monkeypatch):
         profit=Decimal("100.00"),
         is_deleted=True,
     )
+    _seed_kof_load(
+        db,
+        order_no=700104,
+        date_of_sale=None,
+        customer="Synthetic Undated Customer",
+        carrier="Synthetic Undated Carrier",
+        stage="booked",
+        price=Decimal("750.00"),
+        cost=Decimal("600.00"),
+        profit=Decimal("150.00"),
+    )
+    _seed_kof_load(
+        db,
+        order_no=700105,
+        date_of_sale=None,
+        customer="Deleted Undated Customer",
+        carrier="Deleted Undated Carrier",
+        stage="booked",
+        price=Decimal("500.00"),
+        cost=Decimal("400.00"),
+        profit=Decimal("100.00"),
+        is_deleted=True,
+    )
     keys = (
         "leads_no_callback",
         "leads_callback",
@@ -783,7 +806,13 @@ def test_kof_api_contract_shapes(client, db, monkeypatch):
     summary = client.get(f"/api/kof/summary?{date_query}&interval=month")
     assert summary.status_code == 200, summary.text
     summary_body = summary.json()
-    assert set(summary_body) == {"totals", "series", "by_equipment"}
+    assert set(summary_body) == {
+        "totals",
+        "undated_loads",
+        "series",
+        "by_equipment",
+    }
+    assert summary_body["undated_loads"] == 1
     assert set(summary_body["totals"]) == {
         "loads",
         "revenue",
@@ -941,7 +970,7 @@ def test_kof_api_contract_shapes(client, db, monkeypatch):
             "last_success_at",
         }
         assert sync_body["configured"] is True
-        assert sync_body["load_count"] == 3
+        assert sync_body["load_count"] == 5
         assert set(sync_body["last_run"]) == {
             "id",
             "kind",

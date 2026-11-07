@@ -680,6 +680,15 @@ def summary(
 ) -> dict:
     start_date, end_date, filters = _date_filters(start, end)
     totals = _average_summary(db, filters)
+    undated_loads = int(
+        db.scalar(
+            select(func.count(KofLoad.order_no)).where(
+                KofLoad.is_deleted.is_(False),
+                KofLoad.date_of_sale.is_(None),
+            )
+        )
+        or 0
+    )
     period = _period_expression(interval, db.bind.dialect.name)
     series_rows = db.execute(
         select(
@@ -720,6 +729,7 @@ def summary(
     ).all()
     return {
         "totals": totals,
+        "undated_loads": undated_loads,
         "series": series,
         "by_equipment": [
             {

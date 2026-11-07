@@ -86,6 +86,17 @@ def test_bootstrap_login_password_setup_gating_and_session_invalidation(
                 assert stale_session.get("/api/loads").status_code == 401
 
                 previous_cookie = client.cookies.get(COOKIE_NAME)
+                wrong_current_password = client.post(
+                    "/api/auth/change-password",
+                    json={
+                        "current_password": "wrong-current-password",
+                        "new_password": "second-personal-password",
+                    },
+                )
+                assert wrong_current_password.status_code == 400
+                assert wrong_current_password.json() == {
+                    "detail": "Current password is incorrect"
+                }
                 changed = client.post(
                     "/api/auth/change-password",
                     json={
