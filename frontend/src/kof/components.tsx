@@ -97,7 +97,7 @@ export function RevenueChart({
         aria-labelledby={titleId}
       >
         <title id={titleId}>
-          Revenue, cost and profit by period. Latest period revenue {compactMoney(data[data.length - 1].revenue)}.
+          Freight cost, carrier cost and profit by period. Latest period freight cost {compactMoney(data[data.length - 1].revenue)}.
         </title>
         {ticks.map((tick) => (
           <g key={tick}>
@@ -162,7 +162,7 @@ export function RevenueChart({
       </svg>
       <figcaption className="mt-2 flex flex-wrap gap-4 text-xs text-muted">
         <span className="inline-flex items-center gap-1.5">
-          <span className="h-2.5 w-2.5 rounded-sm bg-st-booked" /> Revenue
+          <span className="h-2.5 w-2.5 rounded-sm bg-st-booked" /> Freight cost
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-sm bg-surface-3" /> Carrier cost
@@ -190,6 +190,7 @@ export function DataTable<T>({
   caption,
   onRowClick,
   activeKey,
+  cellVerticalAlign = "top",
   emptyMessage = "Nothing to show yet.",
 }: {
   columns: Column<T>[];
@@ -198,6 +199,7 @@ export function DataTable<T>({
   caption: string;
   onRowClick?: (row: T) => void;
   activeKey?: string | number | null;
+  cellVerticalAlign?: "top" | "middle";
   emptyMessage?: string;
 }) {
   if (!rows.length) {
@@ -239,7 +241,7 @@ export function DataTable<T>({
                 {columns.map((column) => (
                   <td
                     key={column.key}
-                    className={`px-3 py-2.5 align-top ${
+                    className={`px-3 py-2.5 ${cellVerticalAlign === "middle" ? "align-middle" : "align-top"} ${
                       column.align === "right" ? "whitespace-nowrap text-right tabular-nums" : "text-left"
                     }`}
                   >

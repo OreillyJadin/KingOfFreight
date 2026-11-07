@@ -144,7 +144,7 @@ export default function Carriers() {
                 ),
               },
               { key: "last", header: "Last paid", align: "right", render: (row) => <MoneyCell value={row.last_cost} /> },
-              { key: "sell", header: "Avg sell", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
+              { key: "sell", header: "Avg freight cost", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
               { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
             ]}
           />
