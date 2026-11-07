@@ -20,9 +20,21 @@ import { compactMoney, money, monthDay, pct, shortDate } from "../../kof/format"
 import { RangeTabs, useRange } from "../../kof/useRange";
 
 export default function Dashboard() {
-  const { value, setValue, range, label } = useRange("90");
+  const { value, setValue, range, label, month, year, setMonth, setYear } =
+    useRange("month");
   const [params, setParams] = useSearchParams();
-  const interval = params.get("interval") === "month" ? "month" : "week";
+  const intervalParam = params.get("interval");
+  const interval =
+    intervalParam === "week" || intervalParam === "month"
+      ? intervalParam
+      : value === "month"
+        ? "week"
+        : "month";
+  const tableYear = value === "month" ? Number(month.slice(0, 4)) : year;
+  const tableRange =
+    value === "all"
+      ? { start: "2000-01-01" }
+      : { start: `${tableYear}-01-01`, end: `${tableYear}-12-31` };
 
   useEffect(() => {
     document.title = "Dashboard · Fifth Wheel";
@@ -31,6 +43,10 @@ export default function Dashboard() {
   const summary = useQuery({
     queryKey: ["kof", "summary", range, interval],
     queryFn: () => kof.summary(range, interval),
+  });
+  const monthSummary = useQuery({
+    queryKey: ["kof", "summary", tableRange, "month"],
+    queryFn: () => kof.summary(tableRange, "month"),
   });
   const lanes = useQuery({
     queryKey: ["kof", "lanes", range, "city"],
@@ -60,17 +76,40 @@ export default function Dashboard() {
 
   function setInterval(next: "week" | "month") {
     const updated = new URLSearchParams(params);
-    if (next === "week") updated.delete("interval");
-    else updated.set("interval", next);
+    updated.set("interval", next);
     setParams(updated, { replace: true });
   }
+
+  function selectMonth(nextMonth: string) {
+    const updated = new URLSearchParams(params);
+    const now = new Date();
+    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    updated.delete("range");
+    updated.delete("period");
+    if (nextMonth === currentMonth) updated.delete("month");
+    else updated.set("month", nextMonth);
+    setParams(updated, { replace: true });
+  }
+
+  const monthRows = [...(monthSummary.data?.series ?? [])].sort((a, b) =>
+    b.period.localeCompare(a.period),
+  );
 
   const heading = (
     <PageHeading
       eyebrow="Performance"
       title="Dashboard"
       description={`Revenue, carrier cost and margin across your loads. ${label}.`}
-      action={<RangeTabs value={value} onChange={setValue} />}
+      action={
+        <RangeTabs
+          value={value}
+          onChange={setValue}
+          month={month}
+          year={year}
+          setMonth={setMonth}
+          setYear={setYear}
+        />
+      }
     />
   );
   if (showConnectionEmpty) {
@@ -121,6 +160,59 @@ export default function Dashboard() {
           <ErrorState message={(summary.error as Error).message} onRetry={() => summary.refetch()} />
         </div>
       )}
+
+      <Card className="mt-5 min-w-0 overflow-hidden">
+        <h2 className="border-b border-line px-4 py-3 font-bold text-fg">
+          Month by month · {value === "all" ? "All time" : tableYear}
+        </h2>
+        {monthSummary.isPending ? (
+          <TableSkeleton rows={5} />
+        ) : monthSummary.isError ? (
+          <div className="p-4">
+            <ErrorState
+              message={(monthSummary.error as Error).message}
+              onRetry={() => monthSummary.refetch()}
+            />
+          </div>
+        ) : (
+          <DataTable
+            caption="Month-by-month load and revenue summary"
+            rows={monthRows}
+            rowKey={(row) => row.period.slice(0, 7)}
+            activeKey={value === "month" ? month : null}
+            emptyMessage="No loads in this period."
+            columns={[
+              {
+                key: "month",
+                header: "Month",
+                render: (row) => {
+                  const monthValue = row.period.slice(0, 7);
+                  const monthLabel = new Date(`${monthValue}-01T00:00:00`).toLocaleDateString(
+                    undefined,
+                    { month: "short", year: "numeric" },
+                  );
+                  return (
+                    <button
+                      type="button"
+                      aria-pressed={value === "month" && monthValue === month}
+                      onClick={() => selectMonth(monthValue)}
+                      className="min-h-11 rounded-lg px-1 text-left font-semibold text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      {monthLabel}
+                    </button>
+                  );
+                },
+              },
+              { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
+              { key: "revenue", header: "Revenue", align: "right", render: (row) => <MoneyCell value={row.revenue} /> },
+              { key: "avg_price", header: "Avg sell", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
+              { key: "avg_cost", header: "Avg cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
+              { key: "profit", header: "Profit", align: "right", render: (row) => <MoneyCell value={row.profit} /> },
+              { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
+            ]}
+          />
+        )}
+      </Card>
 
       <Card className="mt-5 p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">

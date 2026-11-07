@@ -10,7 +10,8 @@ import { shortDate } from "../../kof/format";
 import { RangeTabs, useRange } from "../../kof/useRange";
 
 export default function Customers() {
-  const { value, setValue, range, label } = useRange("365");
+  const { value, setValue, range, label, month, year, setMonth, setYear } =
+    useRange("year");
   const [filter, setFilter] = useState("");
   useEffect(() => {
     document.title = "Customers · Fifth Wheel";
@@ -33,7 +34,16 @@ export default function Customers() {
         eyebrow="Accounts"
         title="Customers"
         description={`Volume, revenue and margin by customer. ${label}.`}
-        action={<RangeTabs value={value} onChange={setValue} />}
+        action={
+          <RangeTabs
+            value={value}
+            onChange={setValue}
+            month={month}
+            year={year}
+            setMonth={setMonth}
+            setYear={setYear}
+          />
+        }
       />
       <label className="relative mb-4 block max-w-sm">
         <span className="sr-only">Filter customers</span>

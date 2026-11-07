@@ -782,6 +782,8 @@ def summary(
             func.count(KofLoad.order_no),
             func.sum(KofLoad.price),
             func.sum(KofLoad.cost),
+            func.avg(KofLoad.price),
+            func.avg(KofLoad.cost),
             func.sum(KofLoad.profit),
             _margin_expression(),
         )
@@ -795,8 +797,10 @@ def summary(
             "loads": int(row[1] or 0),
             "revenue": _number(row[2]) or 0,
             "cost": _number(row[3]) or 0,
-            "profit": _number(row[4]) or 0,
-            "margin_pct": _number(row[5]),
+            "avg_price": _number(row[4]),
+            "avg_cost": _number(row[5]),
+            "profit": _number(row[6]) or 0,
+            "margin_pct": _number(row[7]),
         }
         for row in series_rows
     ]

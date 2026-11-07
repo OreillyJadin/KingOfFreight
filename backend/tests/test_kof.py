@@ -863,6 +863,8 @@ def test_kof_api_contract_shapes(client, db, monkeypatch):
     assert summary_body["totals"]["margin_pct"] == 20
     assert summary_body["totals"]["on_time_pct"] == 100
     assert summary_body["series"][0]["period"].endswith("-01")
+    assert "avg_price" in summary_body["series"][0]
+    assert "avg_cost" in summary_body["series"][0]
     assert set(summary_body["by_equipment"][0]) == {
         "equipment",
         "loads",
@@ -1026,6 +1028,54 @@ def test_kof_api_contract_shapes(client, db, monkeypatch):
         monkeypatch.delenv("KOF_PASSWORD")
         get_settings.cache_clear()
     assert client.post("/api/kof/sync?kind=full").status_code == 400
+
+
+def test_summary_month_series_includes_per_month_averages(client, db):
+    today = date.today()
+    current_month_start = today.replace(day=1)
+    previous_month_end = current_month_start - timedelta(days=1)
+    previous_month_start = previous_month_end.replace(day=1)
+
+    _seed_kof_load(
+        db,
+        order_no=700201,
+        date_of_sale=previous_month_start + timedelta(days=3),
+        customer="Synthetic Previous Month",
+        carrier="Synthetic Carrier",
+        stage="delivered",
+        price=Decimal("1000.00"),
+        cost=Decimal("700.00"),
+        profit=Decimal("300.00"),
+    )
+    _seed_kof_load(
+        db,
+        order_no=700202,
+        date_of_sale=today,
+        customer="Synthetic Current Month",
+        carrier="Synthetic Carrier",
+        stage="delivered",
+        price=Decimal("2000.00"),
+        cost=Decimal("1000.00"),
+        profit=Decimal("1000.00"),
+    )
+    db.commit()
+
+    response = client.get(
+        f"/api/kof/summary?start={previous_month_start}&end={today}&interval=month"
+    )
+    assert response.status_code == 200, response.text
+    series_by_month = {row["period"][:7]: row for row in response.json()["series"]}
+
+    previous_month = series_by_month[previous_month_start.strftime("%Y-%m")]
+    current_month = series_by_month[current_month_start.strftime("%Y-%m")]
+    assert previous_month["loads"] == 1
+    assert previous_month["revenue"] == 1000
+    assert previous_month["avg_price"] == 1000
+    assert previous_month["avg_cost"] == 700
+    assert current_month["loads"] == 1
+    assert current_month["revenue"] == 2000
+    assert current_month["avg_price"] == 2000
+    assert current_month["avg_cost"] == 1000
 
 
 def test_loads_sort_descending_places_null_dates_last(client, db):

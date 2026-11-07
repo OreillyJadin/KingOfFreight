@@ -10,7 +10,8 @@ import { pct, shortDate } from "../../kof/format";
 import { RangeTabs, useRange } from "../../kof/useRange";
 
 export default function Carriers() {
-  const { value, setValue, range, label } = useRange("365");
+  const { value, setValue, range, label, month, year, setMonth, setYear } =
+    useRange("year");
   const [filter, setFilter] = useState("");
   const [view, setView] = useState<"carriers" | "lanes">("carriers");
   useEffect(() => {
@@ -44,7 +45,16 @@ export default function Carriers() {
         eyebrow="Capacity"
         title="Carriers & lanes"
         description={`What you pay, who you use, and where. ${label}.`}
-        action={<RangeTabs value={value} onChange={setValue} />}
+        action={
+          <RangeTabs
+            value={value}
+            onChange={setValue}
+            month={month}
+            year={year}
+            setMonth={setMonth}
+            setYear={setYear}
+          />
+        }
       />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <Tabs

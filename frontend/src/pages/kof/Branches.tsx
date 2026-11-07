@@ -154,7 +154,8 @@ function BranchDetail({ branch, range }: { branch: string; range: { start?: stri
 }
 
 export default function Branches() {
-  const { value, setValue, range, label } = useRange("365");
+  const { value, setValue, range, label, month, year, setMonth, setYear } =
+    useRange("year");
   const [params, setParams] = useSearchParams();
   const [filter, setFilter] = useState(params.get("q") ?? "");
   const customer = params.get("customer") ?? "united rentals";
@@ -234,7 +235,16 @@ export default function Branches() {
         eyebrow="Accounts"
         title="Branches"
         description={`Every ${customer === "united rentals" ? "United Rentals" : "customer"} branch you haul for, with average rate and cost. ${label}.`}
-        action={<RangeTabs value={value} onChange={(next: RangeValue) => setValue(next)} />}
+        action={
+          <RangeTabs
+            value={value}
+            onChange={(next: RangeValue) => setValue(next)}
+            month={month}
+            year={year}
+            setMonth={setMonth}
+            setYear={setYear}
+          />
+        }
       />
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <label className="relative min-w-[220px] max-w-sm flex-1">
