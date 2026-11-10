@@ -1,6 +1,6 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,7 @@ from app.db import get_db
 from app.integrations.sms import SmsProvider, get_sms_provider
 from app.models import KofLoad
 from app.services.kof_messages import send_message, thread
+from app.services.usage import feature_event
 
 router = APIRouter(
     prefix="/api/kof/loads",
@@ -33,9 +34,13 @@ def messages(order_no: int, db: Session = Depends(get_db)) -> list[dict]:
 def send(
     order_no: int,
     body: SendInput,
+    request: Request,
     db: Session = Depends(get_db),
     sms: SmsProvider = Depends(get_sms_provider),
 ) -> dict:
     if not body.body.strip():
         raise HTTPException(422, "Message must not be blank")
-    return send_message(db, order_no, body.recipient, body.body, sms)
+    result = send_message(db, order_no, body.recipient, body.body, sms)
+    if result["status"] == "sent":
+        feature_event(request, "kof_text_send")
+    return result

@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import require_broker
 from app.services.capabilities import require_live_send
+from app.services.usage import feature_event
 from app.db import get_db
 from app.integrations.email import EmailProvider, get_email_provider, resolve_email_mode
 from app.models import (
@@ -109,7 +110,10 @@ def edit(draft_id: int, payload: DraftEdit, db: Session = Depends(get_db)) -> di
 
 @router.post("/{draft_id}/dismiss")
 def dismiss(
-    draft_id: int, payload: VersionInput, db: Session = Depends(get_db)
+    draft_id: int,
+    payload: VersionInput,
+    request: Request,
+    db: Session = Depends(get_db),
 ) -> dict:
     row = get_draft(db, draft_id)
     if row.state == "dismissed":
@@ -121,6 +125,7 @@ def dismiss(
     row.updated_at = utcnow()
     db.commit()
     drain_deferred(db, row)
+    feature_event(request, "customer_update_dismiss")
     return draft_dict(db, row)
 
 
@@ -128,6 +133,7 @@ def dismiss(
 def approve(
     draft_id: int,
     payload: VersionInput,
+    request: Request,
     db: Session = Depends(get_db),
     email: EmailProvider = Depends(get_email_provider),
 ) -> dict:
@@ -197,4 +203,5 @@ def approve(
     row.version += 1
     db.commit()
     drain_deferred(db, row)
+    feature_event(request, "customer_update_approve")
     return draft_dict(db, row)

@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
+  BarChart3,
   Boxes,
   Briefcase,
   Building2,
@@ -177,6 +178,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       "/status": "Delivery Status · Fifth Wheel",
       "/settings": "Settings · Fifth Wheel",
       "/users": "Users · Fifth Wheel",
+      "/usage": "Usage · Fifth Wheel",
       "/dashboard": "Dashboard · Fifth Wheel",
       "/tracking": "Tracking · Fifth Wheel",
       "/loads": "Loads · Fifth Wheel",
@@ -314,6 +316,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           Settings
         </NavLink>
         {isAdmin && <NavLink to="/users" className="mx-3 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-fg-2 hover:bg-surface-2"><Users className="h-4 w-4" />Users</NavLink>}
+        {isAdmin && <NavLink to="/usage" className={sideLink}><BarChart3 className="h-4 w-4" />Usage</NavLink>}
         </div>
         <div className="border-t border-line p-3">
           <NavLink
@@ -444,7 +447,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </main>
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         <div className="flex snap-x gap-0.5 overflow-x-auto px-2 pt-1.5 [scrollbar-width:none]">
-          {[...mobileTabs, ...(isAdmin ? [{ to: "/users", label: "Users", icon: Users, key: "" }] : [])].filter(tab => tab.key !== "customer-updates" || capabilities.data?.email_live).map(({ to, label, icon: Icon, key }) => (
+          {[...mobileTabs, ...(isAdmin ? [{ to: "/users", label: "Users", icon: Users, key: "" }, { to: "/usage", label: "Usage", icon: BarChart3, key: "" }] : [])].filter(tab => tab.key !== "customer-updates" || capabilities.data?.email_live).map(({ to, label, icon: Icon, key }) => (
             <NavLink
               key={to}
               to={to}

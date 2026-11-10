@@ -85,6 +85,7 @@ def require_broker(request: Request, db: Session = Depends(get_db)) -> User | No
             detail="Broker authentication required",
         )
     if payload.get("uid") is None:
+        request.state.usage_identity = (None, None)
         return None
     user = session_user(payload, db)
     if user is None:
@@ -92,6 +93,7 @@ def require_broker(request: Request, db: Session = Depends(get_db)) -> User | No
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Broker authentication required",
         )
+    request.state.usage_identity = (user.id, user.username)
     return user
 
 

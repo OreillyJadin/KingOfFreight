@@ -1,6 +1,6 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,7 @@ from app.db import get_db
 from app.integrations.email import EmailProvider, get_email_provider
 from app.models import Communication, KofLoad
 from app.services.capabilities import require_live_send
+from app.services.usage import feature_event
 from app.services.kof_emails import (
     email_dict,
     recipient_contact,
@@ -52,6 +53,7 @@ def compose(order_no: int, db: Session = Depends(get_db)):
 def send(
     order_no: int,
     payload: SendInput,
+    request: Request,
     db: Session = Depends(get_db),
     email: EmailProvider = Depends(get_email_provider),
 ):
@@ -77,4 +79,5 @@ def send(
     db.add(row)
     db.commit()
     db.refresh(row)
+    feature_event(request, "kof_email_send")
     return email_dict(row)

@@ -25,6 +25,18 @@ export type UserAccount = {
   last_login_at: string | null;
 };
 
+export type UsageReport = {
+  days: number;
+  timezone: string;
+  totals: { events: number; active_users: number; chat_questions: number; page_views: number };
+  daily: { date: string; active_users: number; questions: number }[];
+  users: { user_id: number | null; username: string | null; label: string; last_seen: string; page_views: number; questions: number; top_page: string | null; devices: Record<string, number> }[];
+  top_pages: { name: string; count: number }[];
+  top_features: { name: string; count: number }[];
+  devices: Record<string, number>;
+  questions: { username: string | null; user: string; time: string; text: string }[];
+};
+
 export class ApiError extends Error {
   constructor(message: string, public status: number) {
     super(message);
@@ -158,6 +170,7 @@ export const api = {
   logout: () => request<{ authenticated: boolean }>("/auth/logout", json("POST")),
   claimAdmin: (username: string, password: string) => request<UserAccount>("/admin/claim", json("POST", { username, password })),
   users: () => request<UserAccount[]>("/admin/users"),
+  usage: (days: 7 | 30 | 90) => request<UsageReport>(`/admin/usage?days=${days}`),
   createUser: (body: { username: string; password: string; role: "admin" | "member" }) => request<UserAccount>("/admin/users", json("POST", body)),
   updateUser: (id: number, body: { role?: "admin" | "member"; is_active?: boolean }) => request<UserAccount>(`/admin/users/${id}`, json("PATCH", body)),
   resetUserPassword: (id: number, password: string) => request<UserAccount>(`/admin/users/${id}/reset-password`, json("POST", { password })),

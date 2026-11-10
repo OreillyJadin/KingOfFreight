@@ -1,6 +1,6 @@
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
@@ -16,8 +16,16 @@ from app.auth import (
 from app.db import get_db
 from app.models import User, utcnow
 from app.routers.auth import _set_session_cookie
+from app.services.usage_report import report
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
+
+
+@router.get("/usage", dependencies=[Depends(require_admin)])
+def usage(
+    days: Literal["7", "30", "90"] = Query(default="7"), db: Session = Depends(get_db)
+):
+    return report(db, int(days))
 
 
 class Credentials(BaseModel):

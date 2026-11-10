@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -16,6 +16,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.models import User, utcnow
 from app.services.preferences import get_prefs
+from app.services.usage import feature_event
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
@@ -53,7 +54,10 @@ def _set_session_cookie(response: Response, user: User | None = None) -> None:
 
 @router.post("/login")
 def login(
-    payload: LoginRequest, response: Response, db: Session = Depends(get_db)
+    payload: LoginRequest,
+    response: Response,
+    request: Request,
+    db: Session = Depends(get_db),
 ) -> dict[str, bool | str | None]:
     username = (payload.username or "").strip()
     user: User | None = None
@@ -82,6 +86,8 @@ def login(
         db.commit()
 
     _set_session_cookie(response, user)
+    request.state.usage_identity = (user.id, user.username) if user else (None, None)
+    feature_event(request, "login_success")
     return {
         "authenticated": True,
         "username": user.username if user is not None else None,
