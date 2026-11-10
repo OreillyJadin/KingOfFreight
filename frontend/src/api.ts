@@ -39,9 +39,11 @@ export type OutlookConnection = {
 export type AssistantReply = {
   reply: string;
   loads: { source: "kof" | "operational"; id: number; label: string }[];
-  actions?: KofTextAction[];
+  actions?: (KofTextAction | KofEmailAction)[];
 };
 export type KofTextAction = { type: "send_kof_text"; order_no: number; recipient: "carrier" | "dispatch"; to_label: string; body: string };
+export type KofEmailAction = { type: "send_kof_email"; order_no: number; recipient: "carrier" | "dispatch"; to_label: string; subject: string; body: string };
+export type KofEmail = { id: number; direction: string; from_addr: string | null; to_addr: string | null; subject: string; content: string; created_at: string };
 export type KofMessage = {
   id: number; order_no: number | null; direction: "out" | "in";
   to_phone: string | null; from_phone: string | null; body: string;
@@ -110,9 +112,12 @@ export const api = {
   editCustomerUpdate: (id: number, body: { version: number; to_email: string; subject: string; body: string }) => request<CustomerUpdateDraft>(`/customer-updates/${id}`, json("PATCH", body)),
   approveCustomerUpdate: (id: number, version: number) => request<CustomerUpdateDraft>(`/customer-updates/${id}/approve`, json("POST", { version })),
   dismissCustomerUpdate: (id: number, version: number) => request<CustomerUpdateDraft>(`/customer-updates/${id}/dismiss`, json("POST", { version })),
-  integrationsStatus: () => request<{ llm: "anthropic" | "mock"; sms: "twilio" | "mock"; twilio_configured: boolean }>("/integrations/status"),
+  integrationsStatus: () => request<{ llm: "anthropic" | "mock"; sms: "twilio" | "mock"; twilio_configured: boolean; email: "outlook" | "graph" | "mock" }>("/integrations/status"),
   kofMessages: (orderNo: number) => request<KofMessage[]>(`/kof/loads/${orderNo}/messages`),
   sendKofText: (orderNo: number, recipient: KofTextAction["recipient"], body: string) => request<KofMessage>(`/kof/loads/${orderNo}/messages`, json("POST", { recipient, body })),
+  kofEmails: (orderNo: number) => request<KofEmail[]>(`/kof/loads/${orderNo}/emails`),
+  kofEmailDraft: (orderNo: number) => request<KofEmailAction>(`/kof/loads/${orderNo}/emails/draft`),
+  sendKofEmail: (action: KofEmailAction) => request<KofEmail>(`/kof/loads/${action.order_no}/emails`, json("POST", { recipient: action.recipient, subject: action.subject, body: action.body })),
   outlookConnection: () => request<OutlookConnection>("/email/connection"),
   saveOutlookConnection: (body: { client_id: string; client_secret: string }) => request<OutlookConnection>("/email/connection", json("PUT", body)),
   removeOutlookConnection: () => request<void>("/email/connection", json("DELETE")),

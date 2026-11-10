@@ -1005,7 +1005,7 @@ def _ingest_email_message(db: Session, message: dict, llm: LlmProvider) -> None:
                     order_no,
                     "email",
                     communication.id,
-                    text,
+                    message.get("body_text") or "",
                     message.get("received_at") or communication.created_at,
                     llm,
                 )
@@ -1056,7 +1056,7 @@ def _ingest_email_message(db: Session, message: dict, llm: LlmProvider) -> None:
             order_no,
             "email",
             communication.id,
-            text,
+            message.get("body_text") or "",
             message.get("received_at") or communication.created_at,
             llm,
         )

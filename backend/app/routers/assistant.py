@@ -13,6 +13,8 @@ from app.auth import require_broker
 from app.config import get_settings
 from app.db import get_db
 from app.models import AssistantConnection
+from app.integrations.sms import resolve_sms_mode
+from app.services.twilio_credentials import get_twilio_credentials
 from app.services.assistant_credentials import get_assistant_key
 from app.services.assistant_tools import AssistantTools
 from app.services.kof_credentials import encrypt_kof_password
@@ -79,6 +81,16 @@ def delete_connection(db: Session = Depends(get_db)) -> None:
 
 
 TOOL_ARGUMENTS = {
+    "draft_dispatcher_email": (
+        {
+            "order_no": {"type": "integer", "minimum": 1},
+            "recipient": {"type": "string", "enum": ["dispatch", "carrier"]},
+            "subject": {"type": "string", "maxLength": 450},
+            "body": {"type": "string", "maxLength": 20000},
+        },
+        ["order_no", "recipient", "subject", "body"],
+        "Draft a KOF dispatcher/carrier email for broker review. Never sends. Broker must approve the exact preview.",
+    ),
     "list_pending_customer_updates": (
         {},
         [],
@@ -176,8 +188,10 @@ def chat(body: ChatInput, db: Session = Depends(get_db)) -> dict:
     now = datetime.now(ZoneInfo(prefs.broker_timezone))
     system = f"""You are a freight broker's assistant. Current broker date/time: {now.isoformat()}.
 Broker timezone: {prefs.broker_timezone}. You can read records and draft KOF carrier/dispatch texts for review.
+Active SMS mode: {resolve_sms_mode(get_twilio_credentials(db) is not None)}. You can also draft dispatcher emails for approval.
 Nothing is sent without the broker reviewing the exact preview and tapping Send. Other operational changes are unavailable.
-When asked to text or check with a KOF carrier, first look up the order, PO and lane, then call draft_driver_text.
+When asked to email a dispatcher/carrier, first look up the order, PO and lane, then call draft_dispatcher_email. Ask for current status and ETA, cite order #, PO and lane, and sign with {prefs.broker_name} / {prefs.broker_company}.
+For a general 'check with the carrier' request, prefer email when SMS is mock. Explicit texting requests use draft_driver_text.
 Draft a short message citing order #, PO when recorded, and lane. Sign it with {prefs.broker_name} / {prefs.broker_company}.
 Tell the user to review and tap Send. Never claim a draft was sent. For 'did they reply', read messages using get_load_status.
 For updates owed to customers, use list_pending_customer_updates and direct the broker to /customer-updates. Never send or approve customer emails; only the broker can approve the exact preview in the queue.

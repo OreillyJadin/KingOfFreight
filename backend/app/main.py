@@ -24,6 +24,7 @@ from app.routers.twilio import router as twilio_router
 from app.routers.outlook import router as outlook_router
 from app.routers.kof import router as kof_router
 from app.routers.kof_messages import router as kof_messages_router
+from app.routers.kof_emails import router as kof_emails_router
 from app.routers.customer_updates import router as customer_updates_router
 from app.services.checkins import run_checkin_tick
 
@@ -144,6 +145,7 @@ app.include_router(protected)
 app.include_router(public)
 app.include_router(kof_router)
 app.include_router(kof_messages_router)
+app.include_router(kof_emails_router)
 app.include_router(customer_updates_router)
 if settings.env == "development":
     app.include_router(dev_public)

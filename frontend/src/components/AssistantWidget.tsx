@@ -5,9 +5,10 @@ import { useQuery } from "@tanstack/react-query";
 import { api, ApiError, type AssistantMessage, type AssistantReply } from "../api";
 import Modal from "./Modal";
 import KofTextActionCard, { type TextDraft } from "./KofTextActionCard";
+import KofEmailActionCard, { type EmailDraft } from "./KofEmailActionCard";
 import { Button, Textarea, buttonClass } from "./ui";
 
-type ChatMessage = AssistantMessage & { loads?: AssistantReply["loads"]; actions?: TextDraft[] };
+type ChatMessage = AssistantMessage & { loads?: AssistantReply["loads"]; actions?: (TextDraft | EmailDraft)[] };
 const starters = [
   "Did order/PO # … get loaded?",
   "Which loads have no update in 4 hours?",
@@ -82,7 +83,7 @@ export default function AssistantWidget() {
                 <div className="flex flex-col gap-2">
                   {starters.map((prompt) => <Button key={prompt} className="min-h-11 justify-start whitespace-normal text-left text-sm" onClick={() => { setDraft(prompt); input.current?.focus(); }}>{prompt}</Button>)}
                 </div>
-                <p className="text-xs leading-relaxed text-muted">Read records or draft a KOF carrier text. Nothing sends until you review the exact preview and tap Send. Load stages are never changed.</p>
+                <p className="text-xs leading-relaxed text-muted">Read records or draft a KOF carrier email or text. Nothing sends until you review the exact preview and tap Send. Load stages are never changed.</p>
               </div>
             )}
             <div role="log" aria-label="Conversation" aria-live="polite" className="space-y-5">
@@ -93,7 +94,10 @@ export default function AssistantWidget() {
                   {!!message.loads?.length && <div className="mt-3 flex flex-wrap gap-2" aria-label="Referenced loads">
                     {message.loads.map((load) => <LoadChip key={`${load.source}-${load.id}`} load={load} onOpen={() => setOpen(false)} />)}
                   </div>}
-                  {message.actions?.map((action, actionIndex) => <KofTextActionCard key={actionIndex} action={action} onSettings={() => setOpen(false)} onChange={(update) => setMessages((current) => current.map((item, messageIndex) => messageIndex === index ? { ...item, actions: item.actions?.map((draftAction, draftIndex) => draftIndex === actionIndex ? { ...draftAction, ...update } : draftAction) } : item))} />)}
+                  {message.actions?.map((action, actionIndex) => {
+                    const onChange = (update: Partial<TextDraft> | Partial<EmailDraft>) => setMessages((current) => current.map((item, messageIndex) => messageIndex === index ? { ...item, actions: item.actions?.map((draftAction, draftIndex) => draftIndex === actionIndex ? { ...draftAction, ...update } as TextDraft | EmailDraft : draftAction) } : item));
+                    return action.type === "send_kof_email" ? <KofEmailActionCard key={actionIndex} action={action} onSettings={() => setOpen(false)} onChange={onChange} /> : <KofTextActionCard key={actionIndex} action={action} onSettings={() => setOpen(false)} onChange={onChange} />;
+                  })}
                 </div>
               ))}
             </div>
