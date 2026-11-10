@@ -52,7 +52,7 @@ class Settings(BaseSettings):
     graph_client_id: str | None = None
     graph_client_secret: str | None = None
     graph_mailbox: str | None = None
-    llm_provider: str = "mock"
+    llm_provider: str = "auto"
     anthropic_api_key: str | None = None
     anthropic_model: str = "claude-sonnet-4-5"
     fmcsa_provider: str = "mock"

@@ -64,8 +64,11 @@ def test_anthropic_bol_uses_pdf_prompt_forced_tool_and_validates():
         (None, None, None),
     ],
 )
-def test_provider_resolves_shared_key(db, monkeypatch, app_key, env_key, expected):
-    monkeypatch.setattr(get_settings(), "llm_provider", "anthropic")
+@pytest.mark.parametrize("mode", ["auto", "anthropic"])
+def test_provider_resolves_shared_key(
+    db, monkeypatch, app_key, env_key, expected, mode
+):
+    monkeypatch.setattr(get_settings(), "llm_provider", mode)
     monkeypatch.setattr(get_settings(), "anthropic_api_key", env_key)
     monkeypatch.setattr("app.integrations.llm.SessionLocal", lambda: nullcontext(db))
     if app_key:

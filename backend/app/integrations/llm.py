@@ -2,7 +2,7 @@ import base64
 import logging
 import re
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 import anthropic
 from pypdf import PdfReader
@@ -287,10 +287,19 @@ class FallbackLlmProvider:
             return self.fallback.parse_reply(reply_text, context)
 
 
+def resolve_llm_mode(has_key: bool) -> Literal["anthropic", "mock"]:
+    return (
+        "anthropic"
+        if get_settings().llm_provider in {"auto", "anthropic"} and has_key
+        else "mock"
+    )
+
+
 def get_llm_provider() -> LlmProvider:
-    if get_settings().llm_provider == "anthropic":
-        key = _api_key()
-        if key:
-            return FallbackLlmProvider(AnthropicLlmProvider(api_key=key))
+    mode = get_settings().llm_provider
+    key = _api_key() if mode in {"auto", "anthropic"} else None
+    if resolve_llm_mode(bool(key)) == "anthropic":
+        return FallbackLlmProvider(AnthropicLlmProvider(api_key=key))
+    if mode == "anthropic":
         logger.warning("Anthropic key is not configured; using mock LLM fallback")
     return MockLlmProvider()

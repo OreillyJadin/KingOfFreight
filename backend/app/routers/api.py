@@ -15,7 +15,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.integrations.email import EmailProvider, get_email_provider
 from app.integrations.fmcsa import FmcsaProvider, get_fmcsa_provider
-from app.integrations.llm import LlmProvider, get_llm_provider
+from app.integrations.llm import LlmProvider, get_llm_provider, resolve_llm_mode
 from app.integrations.sms import SmsProvider, get_sms_provider
 from app.models import (
     BolFile,
@@ -47,6 +47,7 @@ from app.schemas import (
     TrackingPing,
     VerifyCarrier,
 )
+from app.services.assistant_credentials import get_assistant_key
 from app.services.checkins import (
     DELIVERY_PASSED,
     PICKUP_PASSED,
@@ -85,6 +86,23 @@ def _get_load(db: Session, load_id: int) -> Load:
     if load is None:
         raise HTTPException(status_code=404, detail="Load not found")
     return load
+
+
+@protected.get("/integrations/status")
+def integrations_status(db: Session = Depends(get_db)) -> dict:
+    settings = get_settings()
+    return {
+        "llm": resolve_llm_mode(bool(get_assistant_key(db))),
+        "sms": "twilio" if settings.sms_provider == "twilio" else "mock",
+        "twilio_configured": all(
+            value and value.strip()
+            for value in (
+                settings.twilio_account_sid,
+                settings.twilio_auth_token,
+                settings.twilio_from_number,
+            )
+        ),
+    }
 
 
 @protected.get("/settings")
