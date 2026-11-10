@@ -653,6 +653,7 @@ def alerts(db: Session = Depends(get_db)) -> list[dict]:
         {
             "id": item.id,
             "kind": item.kind,
+            "checkin_channel": item.checkin_channel,
             "state": item.state,
             "checkin_sent_at": item.checkin_sent_at,
             "scheduled_time": item.scheduled_time,

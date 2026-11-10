@@ -16,6 +16,7 @@ from app.models import (
 )
 from app.routers.assistant import available_tools
 from app.services.capabilities import capabilities
+from app.services.checkins import run_checkin_tick
 from tests.test_assistant import block, fake_provider
 from tests.test_customer_updates import ingest
 from tests.test_kof_messages import kof_load
@@ -162,3 +163,44 @@ def test_app_env_alias(monkeypatch):
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv("SECRET_KEY", "test-production-secret-at-least-32-characters")
     assert Settings(_env_file=None).env == "production"
+
+
+@pytest.mark.parametrize("channel", ["sms", "email"])
+def test_tick_skips_disconnected_channel_once_per_tick(
+    db, load_data, providers, monkeypatch, caplog, channel
+):
+    monkeypatch.setattr(get_settings(), "env", "production")
+    monkeypatch.setattr(
+        "app.services.checkins.capabilities",
+        lambda db: {"sms_live": channel != "sms", "email_live": channel != "email"},
+    )
+    load, _ = load_data
+    rows = [
+        ScheduledCheckIn(
+            load_id=load.id,
+            kind="pickup",
+            scheduled_time=utcnow(),
+            send_at=utcnow(),
+            driver_contact="+15551234567" if channel == "sms" else "driver@example.com",
+            checkin_channel=channel,
+            state="scheduled",
+        )
+        for _ in range(2)
+    ]
+    db.add_all(rows)
+    db.commit()
+    run_checkin_tick(db, sms=providers["sms"], email=providers["email"])
+    assert not providers["sms"].sent and not providers["email"].sent
+    assert not db.scalar(select(Communication))
+    for row in rows:
+        db.refresh(row)
+        assert row.state == "scheduled" and row.checkin_sent_at is None
+    records = [
+        record for record in caplog.records if record.name == "app.services.checkins"
+    ]
+    assert len(records) == 1
+    assert (
+        records[0].getMessage()
+        == "Skipped 2 scheduled check-ins: channel not connected"
+    )
+    assert records[0].exc_info is None
