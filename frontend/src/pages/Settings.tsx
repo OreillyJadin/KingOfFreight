@@ -8,6 +8,7 @@ import { setBrokerTimeZone } from "../utils";
 import { useToast } from "../useToast";
 import { ChangePasswordCard, KofSyncCard } from "../kof/SettingsSections";
 import AssistantSettings from "../components/AssistantSettings";
+import TwilioSettings from "../components/TwilioSettings";
 
 const timezones = [
   ["Eastern", "America/New_York"],
@@ -203,6 +204,7 @@ export default function Settings() {
       </form>
       <div className="mt-8 space-y-5">
         <AssistantSettings />
+        <TwilioSettings />
         <KofSyncCard />
         <ChangePasswordCard />
       </div>

@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     kof_base_url: str = "https://kingsoffreight.com/"
     kof_sync_interval_minutes: int = Field(default=15, ge=1)
     kof_full_sync_hour_utc: int = Field(default=8, ge=0, le=23)
-    sms_provider: str = "mock"
+    sms_provider: str = "auto"
     twilio_account_sid: str | None = None
     twilio_auth_token: str | None = None
     twilio_from_number: str | None = None

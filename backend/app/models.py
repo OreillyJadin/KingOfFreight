@@ -323,6 +323,16 @@ class User(Base):
     )
 
 
+class TwilioConnection(Base):
+    __tablename__ = "twilio_connection"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_twilio_connection_singleton"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_sid: Mapped[str] = mapped_column(String(34), nullable=False)
+    token_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+    from_number: Mapped[str] = mapped_column(String(16), nullable=False)
+
+
 class AssistantConnection(Base):
     __tablename__ = "assistant_connection"
     __table_args__ = (
