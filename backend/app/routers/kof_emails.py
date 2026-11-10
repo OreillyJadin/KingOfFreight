@@ -8,6 +8,7 @@ from app.auth import require_broker
 from app.db import get_db
 from app.integrations.email import EmailProvider, get_email_provider
 from app.models import Communication, KofLoad
+from app.services.capabilities import require_live_send
 from app.services.kof_emails import (
     email_dict,
     recipient_contact,
@@ -54,6 +55,7 @@ def send(
     db: Session = Depends(get_db),
     email: EmailProvider = Depends(get_email_provider),
 ):
+    require_live_send("email", email)
     _, address, _ = recipient_contact(db, order_no, payload.recipient)
     subject = subject_for(order_no, payload.subject)
     try:

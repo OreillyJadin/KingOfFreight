@@ -61,6 +61,7 @@ from app.services.checkins import (
 )
 from app.services.fmcsa import score_carrier
 from app.services.messaging import send_outbound
+from app.services.capabilities import capabilities
 from app.services.kof_messages import handle_kof_sms
 from app.services.preferences import get_prefs
 from app.services.stop_timezones import (
@@ -98,6 +99,7 @@ def integrations_status(db: Session = Depends(get_db)) -> dict:
     credentials = get_twilio_credentials(db)
     outlook = db.get(OutlookConnection, 1)
     return {
+        **capabilities(db),
         "llm": resolve_llm_mode(bool(get_assistant_key(db))),
         "sms": resolve_sms_mode(bool(credentials)),
         "twilio_configured": bool(credentials),

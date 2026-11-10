@@ -248,6 +248,10 @@ def test_operational_precedence_unless_explicit_kof(
 def test_draft_tool_chat_returns_action_and_sends_nothing(
     client, db, providers, monkeypatch
 ):
+    monkeypatch.setattr(
+        "app.routers.assistant.capabilities",
+        lambda db: {"sms_live": True, "email_live": False, "assistant_live": True},
+    )
     load = kof_load(db)
     body = "Order #90123, PO PO-789, Wichita KS to Dallas TX: update? Jadin / KOF"
     provider = fake_provider(

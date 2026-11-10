@@ -15,6 +15,7 @@ from app.integrations.sms import SmsProvider
 from app.models import Communication, KofLoad, KofMessage, utcnow
 from app.services.checkins import handle_driver_reply, normalize_contact
 from app.services.customer_updates import detect_update
+from app.services.capabilities import require_live_send
 from app.services.preferences import get_prefs
 from app.services.twilio_credentials import get_twilio_credentials
 
@@ -93,6 +94,7 @@ def thread(db: Session, order_no: int, limit: int = 100) -> list[dict]:
 def send_message(
     db: Session, order_no: int, recipient: Recipient, body: str, sms: SmsProvider
 ) -> dict:
+    require_live_send("sms", sms)
     _, number, _ = recipient_contact(db, order_no, recipient)
     credentials = get_twilio_credentials(db)
     row = KofMessage(

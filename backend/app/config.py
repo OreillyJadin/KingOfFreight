@@ -2,7 +2,7 @@ from functools import lru_cache
 import os
 from pathlib import Path
 
-from pydantic import Field, field_validator, model_validator
+from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -59,7 +59,9 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-4-5"
     fmcsa_provider: str = "mock"
     fmcsa_webkey: str | None = None
-    env: str = "development"
+    env: str = Field(
+        default="development", validation_alias=AliasChoices("APP_ENV", "ENV", "env")
+    )
 
     @field_validator(
         "sms_provider",

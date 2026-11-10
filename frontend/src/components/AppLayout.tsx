@@ -27,6 +27,7 @@ import { Badge, Button, Card } from "./ui";
 import { Wordmark } from "./Brand";
 import ThemeToggle from "./ThemeToggle";
 import AssistantWidget from "./AssistantWidget";
+import { useCapabilities } from "../useCapabilities";
 
 const tabs = [
   { to: "/customer-updates", label: "Customer updates", icon: Mail, key: "customer-updates" },
@@ -232,7 +233,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     if (key === "truckstop") return truckstop.data?.length ?? 0;
     return delivery.data?.length ?? 0;
   };
-  const customerUpdates = useQuery({ queryKey: ["customer-updates"], queryFn: api.customerUpdates, refetchInterval: 30000 });
+  const capabilities = useCapabilities();
+  const customerUpdates = useQuery({ queryKey: ["customer-updates"], queryFn: api.customerUpdates, refetchInterval: 30000, enabled: capabilities.data?.email_live === true });
   async function logout() {
     await api.logout();
     await queryClient.clear();
@@ -265,7 +267,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </nav>
         <p className="px-5 pt-5 text-[11px] font-bold uppercase tracking-[0.16em] text-muted">Operate</p>
         <nav aria-label="Main" className="space-y-0.5 px-3 pt-1.5">
-          {tabs.map(({ to, label, icon: Icon, key }) => (
+          {tabs.filter(tab => tab.key !== "customer-updates" || capabilities.data?.email_live).map(({ to, label, icon: Icon, key }) => (
             <NavLink
               key={to}
               to={to}
@@ -435,7 +437,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </main>
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         <div className="flex snap-x gap-0.5 overflow-x-auto px-2 pt-1.5 [scrollbar-width:none]">
-          {mobileTabs.map(({ to, label, icon: Icon, key }) => (
+          {mobileTabs.filter(tab => tab.key !== "customer-updates" || capabilities.data?.email_live).map(({ to, label, icon: Icon, key }) => (
             <NavLink
               key={to}
               to={to}
