@@ -14,6 +14,7 @@ import {
   Settings,
   Truck,
   Warehouse,
+  Users,
   X,
 } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
@@ -28,6 +29,7 @@ import { Wordmark } from "./Brand";
 import ThemeToggle from "./ThemeToggle";
 import AssistantWidget from "./AssistantWidget";
 import { useCapabilities } from "../useCapabilities";
+import AdminClaimBanner from "./AdminClaimBanner";
 
 const tabs = [
   { to: "/customer-updates", label: "Customer updates", icon: Mail, key: "customer-updates" },
@@ -157,6 +159,8 @@ function AlertsPanel({
 }
 
 export default function AppLayout({ children }: { children: ReactNode }) {
+  const auth = useQuery({ queryKey: ["auth"], queryFn: api.me });
+  const isAdmin = auth.data?.role === "admin";
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -172,6 +176,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       "/truckstop": "TruckStop · Fifth Wheel",
       "/status": "Delivery Status · Fifth Wheel",
       "/settings": "Settings · Fifth Wheel",
+      "/users": "Users · Fifth Wheel",
       "/dashboard": "Dashboard · Fifth Wheel",
       "/tracking": "Tracking · Fifth Wheel",
       "/loads": "Loads · Fifth Wheel",
@@ -308,6 +313,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <Settings className="h-4 w-4 shrink-0" />
           Settings
         </NavLink>
+        {isAdmin && <NavLink to="/users" className="mx-3 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-fg-2 hover:bg-surface-2"><Users className="h-4 w-4" />Users</NavLink>}
         </div>
         <div className="border-t border-line p-3">
           <NavLink
@@ -433,11 +439,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </div>
       </header>
       <main id="main" tabIndex={-1} className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 md:pb-10 md:pl-60 focus:outline-none">
+        {!auth.data?.username && auth.data?.can_claim_admin && <AdminClaimBanner />}
         {children}
       </main>
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         <div className="flex snap-x gap-0.5 overflow-x-auto px-2 pt-1.5 [scrollbar-width:none]">
-          {mobileTabs.filter(tab => tab.key !== "customer-updates" || capabilities.data?.email_live).map(({ to, label, icon: Icon, key }) => (
+          {[...mobileTabs, ...(isAdmin ? [{ to: "/users", label: "Users", icon: Users, key: "" }] : [])].filter(tab => tab.key !== "customer-updates" || capabilities.data?.email_live).map(({ to, label, icon: Icon, key }) => (
             <NavLink
               key={to}
               to={to}

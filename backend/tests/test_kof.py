@@ -1618,7 +1618,9 @@ def test_lanes_and_carrier_top_lanes_exclude_unknown_states(client, db):
     assert carriers.json()[0]["top_lanes"] == ["Chicago, IL → Des Moines, IA"]
 
 
-def test_kof_connection_put_encrypts_password_and_get_hides_it(client, db, monkeypatch):
+def test_kof_connection_put_encrypts_password_and_get_hides_it(
+    client, db, monkeypatch, admin_login
+):
     from app.config import get_settings
     from app.models import KofConnection
     from app.routers import kof as kof_router
@@ -1670,7 +1672,9 @@ def test_kof_connection_put_encrypts_password_and_get_hides_it(client, db, monke
     get_settings.cache_clear()
 
 
-def test_kof_connection_put_bad_login_saves_nothing(client, db, monkeypatch):
+def test_kof_connection_put_bad_login_saves_nothing(
+    client, db, monkeypatch, admin_login
+):
     from app.config import get_settings
     from app.models import KofConnection
     from app.routers import kof as kof_router
@@ -1706,7 +1710,7 @@ def test_kof_connection_put_bad_login_saves_nothing(client, db, monkeypatch):
 
 
 def test_kof_connection_environment_credentials_take_precedence(
-    client, db, monkeypatch
+    client, db, monkeypatch, admin_login
 ):
     from app.config import get_settings
     from app.models import KofConnection
@@ -1741,7 +1745,9 @@ def test_kof_connection_environment_credentials_take_precedence(
     get_settings.cache_clear()
 
 
-def test_kof_connection_delete_removes_application_credentials(client, db, monkeypatch):
+def test_kof_connection_delete_removes_application_credentials(
+    client, db, monkeypatch, admin_login
+):
     from app.config import get_settings
     from app.models import KofConnection
     from app.services.kof_credentials import encrypt_kof_password

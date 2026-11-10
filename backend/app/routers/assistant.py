@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.orm import Session
 
-from app.auth import require_broker
+from app.auth import require_admin, require_broker
 from app.config import get_settings
 from app.db import get_db
 from app.models import AssistantConnection
@@ -56,7 +56,7 @@ def connection(db: Session = Depends(get_db)) -> dict:
     }
 
 
-@router.put("/connection")
+@router.put("/connection", dependencies=[Depends(require_admin)])
 def save_connection(body: ConnectionInput, db: Session = Depends(get_db)) -> dict:
     key = body.api_key.strip()
     if not key:
@@ -71,7 +71,7 @@ def save_connection(body: ConnectionInput, db: Session = Depends(get_db)) -> dic
     return connection(db)
 
 
-@router.delete("/connection", status_code=204)
+@router.delete("/connection", status_code=204, dependencies=[Depends(require_admin)])
 def delete_connection(db: Session = Depends(get_db)) -> None:
     row = db.get(AssistantConnection, 1)
     if row:

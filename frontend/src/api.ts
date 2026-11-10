@@ -15,6 +15,16 @@ import type {
 
 type RequestOptions = RequestInit & { redirectOn401?: boolean };
 
+export type UserAccount = {
+  id: number;
+  username: string;
+  role: "admin" | "member";
+  is_active: boolean;
+  must_set_password: boolean;
+  created_at: string;
+  last_login_at: string | null;
+};
+
 export class ApiError extends Error {
   constructor(message: string, public status: number) {
     super(message);
@@ -146,12 +156,19 @@ export const api = {
       json("POST", { current_password, new_password }),
     ),
   logout: () => request<{ authenticated: boolean }>("/auth/logout", json("POST")),
+  claimAdmin: (username: string, password: string) => request<UserAccount>("/admin/claim", json("POST", { username, password })),
+  users: () => request<UserAccount[]>("/admin/users"),
+  createUser: (body: { username: string; password: string; role: "admin" | "member" }) => request<UserAccount>("/admin/users", json("POST", body)),
+  updateUser: (id: number, body: { role?: "admin" | "member"; is_active?: boolean }) => request<UserAccount>(`/admin/users/${id}`, json("PATCH", body)),
+  resetUserPassword: (id: number, password: string) => request<UserAccount>(`/admin/users/${id}/reset-password`, json("POST", { password })),
   me: () =>
     request<{
       authenticated: boolean;
       broker_timezone: string;
       username?: string | null;
       must_set_password?: boolean;
+      role: "admin" | "member" | null;
+      can_claim_admin: boolean;
     }>("/auth/me"),
   settings: () => request<BrokerPrefs>("/settings"),
   updateSettings: (partial: BrokerPrefsUpdate) =>

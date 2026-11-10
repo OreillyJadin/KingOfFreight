@@ -70,6 +70,7 @@ export default function Login() {
             <p className="mt-2 text-sm text-muted">
               Sign in to pick up where you left off.
             </p>
+            <p className="mt-2 text-xs text-muted">Use your username and password. Before the first admin is created, you can leave the username blank to use the shared password.</p>
             <form
               className="mt-8 space-y-5"
               onSubmit={(event) => {

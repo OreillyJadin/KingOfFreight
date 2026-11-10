@@ -31,6 +31,8 @@ const fields: (keyof BrokerPrefs)[] = [
 ];
 
 export default function Settings() {
+  const auth = useQuery({ queryKey: ["auth"], queryFn: api.me });
+  const isAdmin = auth.data?.role === "admin";
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const query = useQuery({ queryKey: ["settings"], queryFn: api.settings });
@@ -204,10 +206,10 @@ export default function Settings() {
         </Button>
       </form>
       <div className="mt-8 space-y-5">
-        <AssistantSettings />
-        <TwilioSettings />
-        <OutlookSettings />
-        <KofSyncCard />
+        {isAdmin && <AssistantSettings />}
+        {isAdmin && <TwilioSettings />}
+        <OutlookSettings isAdmin={isAdmin} />
+        <KofSyncCard isAdmin={isAdmin} />
         <ChangePasswordCard />
       </div>
     </div>

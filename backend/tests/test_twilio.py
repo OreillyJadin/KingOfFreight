@@ -35,7 +35,9 @@ def env_credentials(monkeypatch):
         monkeypatch.setattr(get_settings(), field, value)
 
 
-def test_connection_precedence_encryption_and_removal(client, db, monkeypatch):
+def test_connection_precedence_encryption_and_removal(
+    client, db, monkeypatch, admin_login
+):
     assert client.get(PATH).json() == {
         "configured": False,
         "source": None,
@@ -78,11 +80,11 @@ def test_connection_precedence_encryption_and_removal(client, db, monkeypatch):
 @pytest.mark.parametrize(
     "number", ["5551234567", "+0123456", "+1 5551234567", "+1234567890123456", ""]
 )
-def test_connection_rejects_invalid_from(client, number):
+def test_connection_rejects_invalid_from(client, number, admin_login):
     assert client.put(PATH, json={**PAYLOAD, "from_number": number}).status_code == 422
 
 
-def test_connection_rejects_blank_token_and_bad_sid(client):
+def test_connection_rejects_blank_token_and_bad_sid(client, admin_login):
     assert client.put(PATH, json={**PAYLOAD, "auth_token": "  "}).status_code == 422
     assert (
         client.put(PATH, json={**PAYLOAD, "account_sid": "invalid"}).status_code == 422
@@ -99,7 +101,7 @@ def test_connection_rejects_blank_token_and_bad_sid(client):
     ],
 )
 def test_provider_selection_and_current_credentials(
-    client, db, monkeypatch, mode, configured, expected
+    client, db, monkeypatch, mode, configured, expected, admin_login
 ):
     monkeypatch.setattr(get_settings(), "sms_provider", mode)
     monkeypatch.setattr("app.integrations.sms.SessionLocal", lambda: nullcontext(db))
@@ -140,7 +142,7 @@ def test_auto_ignores_incomplete_env_and_default_is_auto(db, monkeypatch):
 @pytest.mark.parametrize("mode", ["auto", "twilio"])
 @pytest.mark.parametrize("explicit_url", [True, False])
 def test_signed_webhook_uses_public_or_forwarded_url(
-    client, monkeypatch, mode, explicit_url
+    client, monkeypatch, mode, explicit_url, admin_login
 ):
     assert client.put(PATH, json=PAYLOAD).status_code == 200
     monkeypatch.setattr(get_settings(), "sms_provider", mode)
@@ -162,7 +164,9 @@ def test_signed_webhook_uses_public_or_forwarded_url(
     assert client.post(path, data=data, headers=headers).status_code == 403
 
 
-def test_webhook_uses_host_when_public_url_is_not_explicit(client, monkeypatch):
+def test_webhook_uses_host_when_public_url_is_not_explicit(
+    client, monkeypatch, admin_login
+):
     client.put(PATH, json=PAYLOAD)
     monkeypatch.delenv("PUBLIC_BASE_URL", raising=False)
     settings = Settings(_env_file=None)
@@ -181,7 +185,7 @@ def test_webhook_uses_host_when_public_url_is_not_explicit(client, monkeypatch):
     assert client.post(path, data=data, headers=headers).status_code == 200
 
 
-def test_webhook_env_token_then_app_override(client, monkeypatch):
+def test_webhook_env_token_then_app_override(client, monkeypatch, admin_login):
     env_credentials(monkeypatch)
     monkeypatch.setattr(get_settings(), "public_base_url", "https://public.example")
     path = "/api/webhooks/twilio/sms"
@@ -203,7 +207,7 @@ def test_webhook_missing_credentials_with_explicit_twilio_rejects(client, monkey
     )
 
 
-def test_test_sms_success_and_validation(client, monkeypatch):
+def test_test_sms_success_and_validation(client, monkeypatch, admin_login):
     assert (
         client.post(
             "/api/integrations/twilio/test", json={"to": "+15550001111"}
@@ -227,7 +231,7 @@ def test_test_sms_success_and_validation(client, monkeypatch):
     )
 
 
-def test_test_sms_redacts_twilio_error(client, monkeypatch):
+def test_test_sms_redacts_twilio_error(client, monkeypatch, admin_login):
     client.put(PATH, json=PAYLOAD)
     constructor = MagicMock()
     constructor.return_value.messages.create.side_effect = TwilioRestException(
