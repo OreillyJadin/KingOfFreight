@@ -196,9 +196,11 @@ def test_state_validation(client, db, monkeypatch, invalid):
         future = time.time() + 601
         monkeypatch.setattr("itsdangerous.timed.time.time", lambda: future)
     elif invalid == "session":
-        client.cookies.set(COOKIE_NAME, create_session(uid=999, password_version=1))
-        # Keep a valid, different legacy session so authentication succeeds.
-        client.cookies.set(COOKIE_NAME, create_session(password_version=10))
+        original_session = client.cookies.get(COOKIE_NAME)
+        replacement = create_session(password_version=10)
+        assert replacement != original_session
+        client.cookies.delete(COOKIE_NAME)
+        client.cookies.set(COOKIE_NAME, replacement)
     else:
         client.cookies.delete("outlook_oauth_state")
     response = client.get(
