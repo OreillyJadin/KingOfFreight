@@ -47,7 +47,9 @@ class Settings(BaseSettings):
     twilio_account_sid: str | None = None
     twilio_auth_token: str | None = None
     twilio_from_number: str | None = None
-    email_provider: str = "mock"
+    email_provider: str = "auto"
+    outlook_client_id: str | None = None
+    outlook_client_secret: str | None = None
     graph_tenant_id: str | None = None
     graph_client_id: str | None = None
     graph_client_secret: str | None = None

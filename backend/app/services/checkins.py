@@ -124,6 +124,7 @@ def handle_driver_reply(
     external_id: str | None = None,
     llm: LlmProvider | None = None,
     store_unmatched: bool = True,
+    load_id: int | None = None,
 ) -> ScheduledCheckIn | None:
     from app.integrations.llm import get_llm_provider
 
@@ -146,7 +147,9 @@ def handle_driver_reply(
         (
             item
             for item in checkins
-            if item.load.status != "delivered" and _contact_match(item.load, normalized)
+            if (load_id is None or item.load_id == load_id)
+            and item.load.status != "delivered"
+            and _contact_match(item.load, normalized)
         ),
         None,
     )

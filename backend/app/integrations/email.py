@@ -1,12 +1,17 @@
 from datetime import datetime, timedelta, timezone
 import html
 import re
+import hashlib
+from urllib.parse import quote
 from typing import Any, Protocol
 from uuid import uuid4
 
 import httpx
 
 from app.config import get_settings
+from app.db import SessionLocal
+from app.models import EmailPollState, OutlookConnection
+from app.services.outlook import access_token
 
 
 class EmailMessage(Protocol):
@@ -33,14 +38,16 @@ class MockEmailProvider:
 
 
 class GraphEmailProvider:
-    # The overlap recovers mail missed while stopped; external_id deduplicates repeats.
-    _last_poll = datetime.now(timezone.utc) - timedelta(hours=24)
-
     def __init__(self) -> None:
         import msal
 
         settings = get_settings()
         self.mailbox = settings.graph_mailbox
+        self.path = f"https://graph.microsoft.com/v1.0/users/{quote(self.mailbox or '', safe='')}"
+        self.poll_key = hashlib.sha256(
+            f"graph:{settings.graph_tenant_id}:{settings.graph_client_id}:{self.mailbox}".encode()
+        ).hexdigest()
+        self.poll_started: datetime | None = None
         self.app = msal.ConfidentialClientApplication(
             settings.graph_client_id,
             authority=f"https://login.microsoftonline.com/{settings.graph_tenant_id}",
@@ -60,7 +67,7 @@ class GraphEmailProvider:
 
     def send(self, to: str, subject: str, body: str) -> str:
         response = httpx.post(
-            f"https://graph.microsoft.com/v1.0/users/{self.mailbox}/sendMail",
+            f"{self.path}/sendMail",
             headers=self._headers(),
             json={
                 "message": {
@@ -77,28 +84,42 @@ class GraphEmailProvider:
 
     def fetch_new_messages(self) -> list[dict[str, Any]]:
         headers = self._headers()
-        last_poll = GraphEmailProvider._last_poll.isoformat().replace("+00:00", "Z")
+        self.poll_started = datetime.now(timezone.utc)
+        with SessionLocal() as db:
+            stored = db.get(EmailPollState, self.poll_key)
+            since = (
+                stored.last_poll if stored else self.poll_started - timedelta(hours=24)
+            )
+            if since.tzinfo is None:
+                since = since.replace(tzinfo=timezone.utc)
+            if stored:
+                since -= timedelta(minutes=1)
+        last_poll = since.isoformat().replace("+00:00", "Z")
         params = {
             "$top": "50",
+            "$select": "id,from,subject,body,receivedDateTime,hasAttachments",
             "$orderby": "receivedDateTime desc",
-            "$filter": f"receivedDateTime gt {last_poll}",
+            "$filter": f"receivedDateTime gt {last_poll} and receivedDateTime le {self.poll_started.isoformat()}",
         }
-        poll_started = datetime.now(timezone.utc)
-        response = httpx.get(
-            f"https://graph.microsoft.com/v1.0/users/{self.mailbox}/mailFolders/inbox/messages",
-            headers=headers,
-            params=params,
-            timeout=30,
-        )
-        response.raise_for_status()
+        items = []
+        url = f"{self.path}/mailFolders/inbox/messages"
+        while url:
+            if not url.startswith("https://graph.microsoft.com/v1.0/"):
+                raise ValueError("Unexpected Microsoft pagination URL")
+            response = httpx.get(url, headers=headers, params=params, timeout=30)
+            response.raise_for_status()
+            page = response.json()
+            items.extend(page.get("value", []))
+            url = page.get("@odata.nextLink")
+            params = None
         results = []
-        for item in response.json().get("value", []):
+        for item in items:
             sender = item.get("from", {}).get("emailAddress", {}).get("address", "")
             body_html = item.get("body", {}).get("content", "")
             attachments: list[tuple[str, bytes]] = []
             if item.get("hasAttachments"):
                 att_response = httpx.get(
-                    f"https://graph.microsoft.com/v1.0/users/{self.mailbox}/messages/{item['id']}/attachments",
+                    f"{self.path}/messages/{quote(item['id'], safe='')}/attachments",
                     headers=headers,
                     timeout=30,
                 )
@@ -133,13 +154,57 @@ class GraphEmailProvider:
                     "pdf_attachments": attachments,
                 }
             )
-        GraphEmailProvider._last_poll = poll_started
         return results
+
+    def commit_poll(self) -> None:
+        if self.poll_started is not None:
+            with SessionLocal() as db:
+                db.merge(EmailPollState(key=self.poll_key, last_poll=self.poll_started))
+                db.commit()
+
+
+class OutlookEmailProvider(GraphEmailProvider):
+    def __init__(self, email: str):
+        self.path = "https://graph.microsoft.com/v1.0/me"
+        self.poll_key = hashlib.sha256(f"outlook:{email.lower()}".encode()).hexdigest()
+        self.poll_started = None
+
+    def _headers(self) -> dict[str, str]:
+        with SessionLocal() as db:
+            token = access_token(db)
+        return {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+
+
+def resolve_email_mode(db) -> str:
+    settings = get_settings()
+    account = db.get(OutlookConnection, 1)
+    if (
+        settings.email_provider in {"auto", "outlook"}
+        and account
+        and not account.needs_reconnect
+    ):
+        return "outlook"
+    if (
+        settings.email_provider == "graph"
+        or settings.email_provider == "auto"
+        and all(
+            value and value.strip()
+            for value in (
+                settings.graph_tenant_id,
+                settings.graph_client_id,
+                settings.graph_client_secret,
+                settings.graph_mailbox,
+            )
+        )
+    ):
+        return "graph"
+    return "mock"
 
 
 def get_email_provider() -> EmailProvider:
-    return (
-        GraphEmailProvider()
-        if get_settings().email_provider == "graph"
-        else MockEmailProvider()
-    )
+    with SessionLocal() as db:
+        mode = resolve_email_mode(db)
+        account = db.get(OutlookConnection, 1)
+        if mode == "outlook":
+            return OutlookEmailProvider(account.email)
+    return GraphEmailProvider() if mode == "graph" else MockEmailProvider()

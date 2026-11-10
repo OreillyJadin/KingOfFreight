@@ -9,6 +9,7 @@ import { useToast } from "../useToast";
 import { ChangePasswordCard, KofSyncCard } from "../kof/SettingsSections";
 import AssistantSettings from "../components/AssistantSettings";
 import TwilioSettings from "../components/TwilioSettings";
+import OutlookSettings from "../components/OutlookSettings";
 
 const timezones = [
   ["Eastern", "America/New_York"],
@@ -205,6 +206,7 @@ export default function Settings() {
       <div className="mt-8 space-y-5">
         <AssistantSettings />
         <TwilioSettings />
+        <OutlookSettings />
         <KofSyncCard />
         <ChangePasswordCard />
       </div>

@@ -12,7 +12,7 @@ from twilio.request_validator import RequestValidator
 
 from app.auth import require_broker
 from app.db import get_db
-from app.integrations.email import EmailProvider, get_email_provider
+from app.integrations.email import EmailProvider, get_email_provider, resolve_email_mode
 from app.integrations.fmcsa import FmcsaProvider, get_fmcsa_provider
 from app.integrations.llm import LlmProvider, get_llm_provider, resolve_llm_mode
 from app.integrations.sms import SmsProvider, get_sms_provider, resolve_sms_mode
@@ -21,8 +21,10 @@ from app.models import (
     BrokerSettings,
     Carrier,
     Communication,
+    KofLoad,
     Load,
     LocationPing,
+    OutlookConnection,
     ScheduledCheckIn,
     StatusUpdate,
     utcnow,
@@ -93,10 +95,19 @@ def _get_load(db: Session, load_id: int) -> Load:
 @protected.get("/integrations/status")
 def integrations_status(db: Session = Depends(get_db)) -> dict:
     credentials = get_twilio_credentials(db)
+    outlook = db.get(OutlookConnection, 1)
     return {
         "llm": resolve_llm_mode(bool(get_assistant_key(db))),
         "sms": resolve_sms_mode(bool(credentials)),
         "twilio_configured": bool(credentials),
+        "email": resolve_email_mode(db),
+        "email_account": {
+            "email": outlook.email,
+            "name": outlook.name,
+            "needs_reconnect": outlook.needs_reconnect,
+        }
+        if outlook
+        else None,
     }
 
 
@@ -937,14 +948,43 @@ def _ingest_email_message(db: Session, message: dict, llm: LlmProvider) -> None:
     ):
         return
     pdfs = message.get("pdf_attachments", [])
-    if pdfs:
-        filename, content = pdfs[0]
+    text = f"{subject}\n{body}"
+
+    def mentions(value):
+        return bool(
+            value
+            and re.search(r"(?<!\w)" + re.escape(str(value)) + r"(?!\w)", text, re.I)
+        )
+
+    operational = [
+        load
+        for load in db.execute(select(Load.id, Load.reference)).all()
+        if mentions(load.reference)
+    ]
+    kof = [
+        load
+        for load in db.execute(
+            select(KofLoad.order_no, KofLoad.po).where(KofLoad.is_deleted.is_(False))
+        ).all()
+        if mentions(load.order_no) or mentions(load.po)
+    ]
+    load_id = operational[0].id if len(operational) == 1 else None
+    order_no = kof[0].order_no if len(kof) == 1 else None
+    related = bool(operational or kof)
+    for filename, content in pdfs:
+        bol = re.search(
+            r"\bBOL\b|bill\s+of\s+lading", f"{text}\n{filename.replace('_', ' ')}", re.I
+        )
+        if not related and not bol:
+            continue
         if content.startswith(b"%PDF") and len(content) <= 15 * 1024 * 1024:
             filename = Path(filename).name[:255]
             extracted = llm.extract_bol(content, filename).model_dump(mode="json")
             db.add(
                 Communication(
                     channel="email",
+                    load_id=load_id,
+                    kof_order_no=order_no,
                     direction="inbound",
                     from_addr=sender,
                     subject=subject,
@@ -960,6 +1000,8 @@ def _ingest_email_message(db: Session, message: dict, llm: LlmProvider) -> None:
             )
             db.commit()
             return
+    if not related:
+        return
     normalized = normalize_contact(sender, "email")
     candidates = (
         db.scalars(
@@ -972,37 +1014,33 @@ def _ingest_email_message(db: Session, message: dict, llm: LlmProvider) -> None:
         .all()
     )
     if any(
-        candidate.load.status != "delivered"
+        candidate.load_id == load_id
+        and order_no is None
+        and candidate.load.status != "delivered"
         and any(
             value and normalize_contact(value, "email") == normalized
             for value in (candidate.load.driver_email, candidate.load.dispatcher_email)
         )
         for candidate in candidates
     ):
-        handle_driver_reply(db, sender, body, "email", external_id, llm)
-        return
-    match = re.search(r"MC[#\s-]*(\d{5,8})", f"{subject}\n{body}", re.I)
-    tag = "mc_provided" if match else None
-    if tag is None:
-        refs = db.scalars(select(Load.reference)).all()
-        if any(
-            reference and reference.lower() in f"{subject}\n{body}".lower()
-            for reference in refs
-        ):
-            tag = "availability"
-    if tag:
-        db.add(
-            Communication(
-                channel="email",
-                direction="inbound",
-                from_addr=sender,
-                subject=subject,
-                content=body,
-                tag=tag,
-                external_id=external_id,
-            )
+        handle_driver_reply(
+            db, sender, f"{subject}\n{body}", "email", external_id, llm, load_id=load_id
         )
-        db.commit()
+        return
+    db.add(
+        Communication(
+            load_id=load_id,
+            kof_order_no=order_no,
+            channel="email",
+            direction="inbound",
+            from_addr=sender,
+            subject=subject,
+            content=body,
+            tag="availability",
+            external_id=external_id,
+        )
+    )
+    db.commit()
 
 
 @dev_public.post("/dev/simulate/sms-reply")

@@ -168,6 +168,9 @@ class Communication(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     load_id: Mapped[int | None] = mapped_column(ForeignKey("loads.id"), nullable=True)
+    kof_order_no: Mapped[int | None] = mapped_column(
+        ForeignKey("kof_loads.order_no"), nullable=True, index=True
+    )
     carrier_id: Mapped[int | None] = mapped_column(
         ForeignKey("carriers.id"), nullable=True
     )
@@ -349,6 +352,32 @@ class KofMessage(Base):
         DateTime(timezone=True), nullable=True
     )
     parsed_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class OutlookApp(Base):
+    __tablename__ = "outlook_app"
+    __table_args__ = (CheckConstraint("id = 1", name="ck_outlook_app_singleton"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    client_id: Mapped[str] = mapped_column(String(100))
+    secret_encrypted: Mapped[str] = mapped_column(Text)
+
+
+class OutlookConnection(Base):
+    __tablename__ = "outlook_connection"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_outlook_connection_singleton"),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    token_encrypted: Mapped[str] = mapped_column(Text)
+    email: Mapped[str] = mapped_column(String(320))
+    name: Mapped[str] = mapped_column(String(250))
+    needs_reconnect: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class EmailPollState(Base):
+    __tablename__ = "email_poll_state"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    last_poll: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class TwilioConnection(Base):
