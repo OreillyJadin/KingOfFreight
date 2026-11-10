@@ -58,6 +58,7 @@ from app.services.checkins import (
 )
 from app.services.fmcsa import score_carrier
 from app.services.messaging import send_outbound
+from app.services.kof_messages import handle_kof_sms
 from app.services.preferences import get_prefs
 from app.services.stop_timezones import (
     STATE_TIMEZONES,
@@ -922,7 +923,7 @@ async def twilio_sms(
         validator = RequestValidator(credentials.auth_token)
         if not validator.validate(webhook_url(request), dict(form), signature):
             raise HTTPException(status_code=403, detail="Invalid Twilio signature")
-    handle_driver_reply(db, sender, body, "sms", sid, llm)
+    handle_kof_sms(db, sender, body, sid, llm, str(form.get("To", "")))
     return Response(content="<Response/>", media_type="application/xml")
 
 

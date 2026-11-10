@@ -123,6 +123,7 @@ def handle_driver_reply(
     channel: str,
     external_id: str | None = None,
     llm: LlmProvider | None = None,
+    store_unmatched: bool = True,
 ) -> ScheduledCheckIn | None:
     from app.integrations.llm import get_llm_provider
 
@@ -149,6 +150,8 @@ def handle_driver_reply(
         ),
         None,
     )
+    if match is None and not store_unmatched:
+        return None
     communication = Communication(
         load_id=match.load_id if match else None,
         channel=channel,
