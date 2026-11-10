@@ -20,6 +20,7 @@ from app.models import (
 from app.routers.kof import _latest_note, _parse_note_entries
 from app.services.kof_credentials import get_kof_credentials
 from app.services.kof_messages import recipient_contact, thread
+from app.services.kof_emails import draft as email_draft, thread as email_thread
 from app.services.customer_updates import draft_dict, pending
 
 LIMIT = 20
@@ -80,6 +81,35 @@ class AssistantTools:
         self.db = db
         self.references: dict[tuple[str, int], dict] = {}
         self.actions: list[dict] = []
+
+    def draft_dispatcher_email(
+        self, order_no: int, recipient: str, subject: str, body: str
+    ) -> dict:
+        if (
+            recipient not in {"carrier", "dispatch"}
+            or not subject.strip()
+            or len(subject) > 450
+            or "\n" in subject
+            or "\r" in subject
+            or not body.strip()
+            or len(body) > 20000
+        ):
+            return {
+                "error": "Choose carrier or dispatch and provide a single-line subject and nonblank body"
+            }
+        try:
+            action = email_draft(self.db, order_no, recipient, subject, body)
+        except HTTPException as error:
+            return {"error": error.detail}
+        if len(self.actions) >= 4:
+            return {"error": "Review existing drafts before preparing more messages"}
+        if action not in self.actions:
+            self.actions.append(action)
+        return {
+            "pending_action": action,
+            "sent": False,
+            "instruction": "Review and tap Send. Nothing has been sent.",
+        }
 
     def draft_driver_text(self, order_no: int, recipient: str, body: str) -> dict:
         if (
@@ -313,6 +343,7 @@ class AssistantTools:
                     ),
                     "notes_may_be_incomplete": True,
                     "messages": thread(self.db, id, limit=10),
+                    "emails": email_thread(self.db, id, limit=10),
                     "pending_customer_update": next(
                         (
                             draft_dict(self.db, row)

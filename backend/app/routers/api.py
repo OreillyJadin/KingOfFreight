@@ -61,6 +61,7 @@ from app.services.checkins import (
 )
 from app.services.fmcsa import score_carrier
 from app.services.messaging import send_outbound
+from app.services.capabilities import capabilities
 from app.services.kof_messages import handle_kof_sms
 from app.services.preferences import get_prefs
 from app.services.stop_timezones import (
@@ -98,6 +99,7 @@ def integrations_status(db: Session = Depends(get_db)) -> dict:
     credentials = get_twilio_credentials(db)
     outlook = db.get(OutlookConnection, 1)
     return {
+        **capabilities(db),
         "llm": resolve_llm_mode(bool(get_assistant_key(db))),
         "sms": resolve_sms_mode(bool(credentials)),
         "twilio_configured": bool(credentials),
@@ -651,6 +653,7 @@ def alerts(db: Session = Depends(get_db)) -> list[dict]:
         {
             "id": item.id,
             "kind": item.kind,
+            "checkin_channel": item.checkin_channel,
             "state": item.state,
             "checkin_sent_at": item.checkin_sent_at,
             "scheduled_time": item.scheduled_time,
@@ -1005,7 +1008,7 @@ def _ingest_email_message(db: Session, message: dict, llm: LlmProvider) -> None:
                     order_no,
                     "email",
                     communication.id,
-                    text,
+                    message.get("body_text") or "",
                     message.get("received_at") or communication.created_at,
                     llm,
                 )
@@ -1056,7 +1059,7 @@ def _ingest_email_message(db: Session, message: dict, llm: LlmProvider) -> None:
             order_no,
             "email",
             communication.id,
-            text,
+            message.get("body_text") or "",
             message.get("received_at") or communication.created_at,
             llm,
         )

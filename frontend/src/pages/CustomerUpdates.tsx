@@ -7,8 +7,9 @@ import { EmptyState, ErrorState, PageHeading } from "../components/common";
 import { Badge, Button, Card, Field, Input, Skeleton, Textarea } from "../components/ui";
 import { formatDateTime } from "../utils";
 import { useToast } from "../useToast";
+import { useCapabilities } from "../useCapabilities";
 
-function UpdateCard({ row, mock }: { row: CustomerUpdateDraft; mock: boolean }) {
+function UpdateCard({ row }: { row: CustomerUpdateDraft }) {
   const cache = useQueryClient();
   const { showToast } = useToast();
   const [draft, setDraft] = useState(row);
@@ -30,7 +31,7 @@ function UpdateCard({ row, mock }: { row: CustomerUpdateDraft; mock: boolean }) 
         setToEdited(false);
         if (action === "approve") await api.approveCustomerUpdate(saved.id, saved.version);
       }
-      showToast(action === "dismiss" ? "Customer update dismissed." : action === "save" ? "Draft saved. Nothing was sent." : mock ? "Marked sent in mock mode — no real email was sent." : "Customer update sent.");
+      showToast(action === "dismiss" ? "Customer update dismissed." : action === "save" ? "Draft saved. Nothing was sent." : "Customer update sent.");
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Could not update this draft");
     } finally {
@@ -47,7 +48,6 @@ function UpdateCard({ row, mock }: { row: CustomerUpdateDraft; mock: boolean }) 
     {latest && <div className="rounded-xl border border-line bg-surface-2 p-3"><p className="mb-2 text-xs text-muted">Carrier message · {latest.channel.toUpperCase()} · <time dateTime={latest.received_at}>{formatDateTime(latest.received_at)}</time></p><blockquote className="whitespace-pre-wrap break-words text-sm text-fg-2">{latest.excerpt}</blockquote></div>}
     <div><p className="text-xs font-semibold uppercase tracking-wide text-muted">AI summary · unconfirmed</p><p className="mt-1 text-sm">{row.summary}</p><p className="mt-1 text-xs text-muted">{row.status.replaceAll("_", " ")} · {Math.round(row.confidence * 100)}% confidence{row.eta ? ` · ETA: ${row.eta}` : ""}</p></div>
     {stale && <div role="status" className="rounded-xl border border-line p-3 text-sm">A newer carrier update changed this draft. Review it before sending.<Button variant="secondary" className="mt-2" onClick={() => { setDraft({ ...row, to_email: toEdited ? draft.to_email : row.to_email }); setError(""); }}>Load latest preview</Button></div>}
-    {mock && <p className="text-sm text-warn-ink">Email not set up — this won’t actually send. <Link className="underline" to="/settings#outlook">Connect Outlook in Settings</Link>.</p>}
     {locked && <p role="status" className="text-sm text-warn-ink">{row.error || "Sending started. If delivery is uncertain, check Sent mail before dismissing. Resending is blocked to prevent duplicates."}</p>}
     <fieldset disabled={busy || locked || stale} className="space-y-3">
       <Field label="To" htmlFor={`to-${row.id}`}><Input id={`to-${row.id}`} className="min-h-11 text-base" type="email" autoComplete="email" placeholder="customer@company.com" value={draft.to_email} onChange={e => { setToEdited(true); setDraft({ ...draft, to_email: e.target.value }); }} /></Field>
@@ -65,13 +65,15 @@ function UpdateCard({ row, mock }: { row: CustomerUpdateDraft; mock: boolean }) 
 }
 
 export default function CustomerUpdates() {
-  const query = useQuery({ queryKey: ["customer-updates"], queryFn: api.customerUpdates, refetchInterval: 30000 });
+  const capabilities = useCapabilities();
+  const query = useQuery({ queryKey: ["customer-updates"], queryFn: api.customerUpdates, refetchInterval: 30000, enabled: capabilities.data?.email_live === true });
   useEffect(() => { document.title = "Customer updates · Fifth Wheel"; }, []);
+  if (!capabilities.data?.email_live) return <p className="text-sm text-muted">Connect Outlook in <Link className="underline" to="/settings">Settings</Link> to turn this on.</p>;
   return <div className="mx-auto max-w-3xl space-y-5">
     <PageHeading eyebrow="Approval queue" title="Customer updates" description="Carrier updates to pass along. Review and edit every email before approving." />
     {query.isPending ? <Skeleton className="h-80" /> : query.isError ? <ErrorState message="Could not load customer updates" onRetry={() => void query.refetch()} /> : <>
       <p aria-live="polite" className="text-sm text-muted">{query.data.count} awaiting approval</p>
-      {query.data.drafts.length ? query.data.drafts.map(row => <UpdateCard key={row.id} row={row} mock={query.data.email_mode === "mock"} />) : <EmptyState icon={Mail} title="All caught up" description="Matched carrier status updates will appear here. Nothing is sent automatically." />}
+      {query.data.drafts.length ? query.data.drafts.map(row => <UpdateCard key={row.id} row={row} />) : <EmptyState icon={Mail} title="All caught up" description="Matched carrier status updates will appear here. Nothing is sent automatically." />}
     </>}
   </div>;
 }

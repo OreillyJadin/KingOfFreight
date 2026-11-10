@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.integrations.email import EmailProvider
 from app.integrations.sms import SmsProvider
 from app.models import Communication, Load, utcnow
+from app.services.capabilities import require_live_send
 
 
 def send_outbound(
@@ -16,6 +17,7 @@ def send_outbound(
     sms: SmsProvider,
     email: EmailProvider,
 ) -> Communication:
+    require_live_send(channel, sms if channel == "sms" else email)
     external_id = (
         sms.send(to, body) if channel == "sms" else email.send(to, subject or "", body)
     )

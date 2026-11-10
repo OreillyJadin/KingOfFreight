@@ -3,6 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
 import KofMessageThread from "../../components/KofMessageThread";
+import KofEmailThread from "../../components/KofEmailThread";
 import { kof, type KofLoadRow } from "../../kof/api";
 import { ErrorState, PageHeading } from "../../components/common";
 import { ListDetail } from "../../components/ListDetail";
@@ -125,7 +126,7 @@ function Detail({ orderNo }: { orderNo: number }) {
           <p className="mt-1 whitespace-pre-line text-sm text-fg-2">{load.product_description}</p>
         </section>
       )}
-      <KofMessageThread orderNo={orderNo} />
+      <div className="grid gap-5 xl:grid-cols-2"><KofEmailThread key={orderNo} orderNo={orderNo} /><KofMessageThread orderNo={orderNo} /></div>
 
       <section>
         <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">

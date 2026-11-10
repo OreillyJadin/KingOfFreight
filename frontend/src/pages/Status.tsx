@@ -17,6 +17,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../api";
 import { useToast } from "../useToast";
 import Modal from "../components/Modal";
+import LiveSendGate from "../components/LiveSendGate";
 import { ListDetail, ListRow, ListRowSkeleton } from "../components/ListDetail";
 import {
   EmptyState,
@@ -159,6 +160,7 @@ function AttentionStrip() {
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 {alert.state === "no_reply" && (
+                  <LiveSendGate channel={alert.checkin_channel}>
                   <Button
                     onClick={() => resend.mutate(alert.id)}
                     disabled={resend.isPending}
@@ -169,6 +171,7 @@ function AttentionStrip() {
                   >
                     Send check-in again
                   </Button>
+                  </LiveSendGate>
                 )}
                 <Button
                   onClick={() => dismiss.mutate(alert.id)}
@@ -226,6 +229,7 @@ function CheckinTimeline({ checkins, load }: { checkins: CheckIn[]; load: Load }
               </p>
             </div>
             {checkin.state === "scheduled" && (
+              <LiveSendGate channel={checkin.checkin_channel}>
               <Button
                 onClick={() => send.mutate(checkin.id)}
                 disabled={send.isPending}
@@ -236,6 +240,7 @@ function CheckinTimeline({ checkins, load }: { checkins: CheckIn[]; load: Load }
               >
                 Send check-in now
               </Button>
+              </LiveSendGate>
             )}
           </div>
           {checkin.reply_raw_text && (
@@ -391,7 +396,7 @@ function PreviewModal({
             >
               Back to edit
             </Button>
-            <Button
+            <LiveSendGate channel={channel}><Button
               onClick={() => approve.mutate()}
               disabled={approve.isPending || !hasContact}
               loading={approve.isPending}
@@ -399,7 +404,7 @@ function PreviewModal({
               icon={Send}
             >
               {approve.isPending ? "Sending…" : "Approve & Send"}
-            </Button>
+            </Button></LiveSendGate>
           </div>
         )
       }
@@ -748,6 +753,7 @@ function LoadStatusDetail({ load }: { load: Load }) {
             </div>
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
+            <LiveSendGate channel={data.driver_phone || data.dispatcher_phone ? "sms" : "email"}>
             <Button
               onClick={() => tracking.mutate()}
               disabled={tracking.isPending || (!data.driver_phone && !data.driver_email && !data.dispatcher_phone && !data.dispatcher_email)}
@@ -759,6 +765,7 @@ function LoadStatusDetail({ load }: { load: Load }) {
             >
               {tracking.isPending ? "Sending…" : "Send tracking link"}
             </Button>
+            </LiveSendGate>
             <details className="group relative">
               <summary className="inline-flex min-h-10 cursor-pointer list-none items-center gap-2 rounded-lg px-3 text-xs font-semibold text-fg-2 hover:bg-surface-3">
                 <MessageSquare className="h-4 w-4" />

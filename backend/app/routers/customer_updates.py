@@ -8,6 +8,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.auth import require_broker
+from app.services.capabilities import require_live_send
 from app.db import get_db
 from app.integrations.email import EmailProvider, get_email_provider, resolve_email_mode
 from app.models import (
@@ -130,6 +131,7 @@ def approve(
     db: Session = Depends(get_db),
     email: EmailProvider = Depends(get_email_provider),
 ) -> dict:
+    require_live_send("email", email)
     row = get_draft(db, draft_id)
     if row.state == "sent":
         return draft_dict(db, row)

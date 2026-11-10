@@ -149,6 +149,7 @@ export type LoadDetail = Load & {
 
 export type Alert = {
   id: number;
+  checkin_channel: "sms" | "email";
   kind: "pickup" | "dropoff";
   state: "no_reply" | "replied";
   checkin_sent_at: string | null;

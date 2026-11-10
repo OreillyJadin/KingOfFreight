@@ -1,9 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api";
 import { Button, Skeleton } from "./ui";
+import { useCapabilities } from "../useCapabilities";
 
 export default function KofMessageThread({ orderNo }: { orderNo: number }) {
+  const capabilities = useCapabilities();
   const messages = useQuery({ queryKey: ["kof", "messages", orderNo], queryFn: () => api.kofMessages(orderNo), refetchInterval: 30000 });
+  if (!capabilities.data?.sms_live && !messages.data?.length) return null;
   return <section>
     <h3 className="text-sm font-semibold text-fg">Messages</h3>
     <p className="mt-1 text-xs text-muted">Latest 100 texts. Driver-reported status is proposed, not confirmed. Nothing here changes KOF stages.</p>

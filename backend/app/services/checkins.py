@@ -10,6 +10,8 @@ from app.integrations.email import EmailProvider
 from app.integrations.llm import LlmProvider
 from app.integrations.sms import SmsProvider
 from app.models import Communication, Load, ScheduledCheckIn, StatusUpdate, utcnow
+from app.config import get_settings
+from app.services.capabilities import capabilities
 from app.services.messaging import send_outbound
 from app.services.preferences import get_prefs
 from app.services.templates import render_checkin, render_status_message
@@ -49,12 +51,26 @@ def run_checkin_tick(
         .unique()
         .all()
     )
+    live = (
+        capabilities(db)
+        if get_settings().env.lower() in {"production", "prod"}
+        else None
+    )
+    unavailable = 0
     for checkin in due:
         load = checkin.load
         if (checkin.kind == "pickup" and load.status in PICKUP_PASSED) or (
             checkin.kind == "dropoff" and load.status in DELIVERY_PASSED
         ):
             checkin.state = "skipped"
+            continue
+        if (
+            live is not None
+            and not live[
+                "sms_live" if checkin.checkin_channel == "sms" else "email_live"
+            ]
+        ):
+            unavailable += 1
             continue
         body = checkin.message_text or render_checkin(load, checkin.kind)
         try:
@@ -79,6 +95,10 @@ def run_checkin_tick(
         checkin.checkin_sent_at = current
         checkin.state = "sent"
 
+    if unavailable:
+        logger.warning(
+            "Skipped %s scheduled check-ins: channel not connected", unavailable
+        )
     sent = db.scalars(
         select(ScheduledCheckIn).where(
             ScheduledCheckIn.state == "sent", ScheduledCheckIn.reply_received.is_(False)
