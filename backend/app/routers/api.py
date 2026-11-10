@@ -50,6 +50,7 @@ from app.schemas import (
     VerifyCarrier,
 )
 from app.services.assistant_credentials import get_assistant_key
+from app.services.customer_updates import detect_update
 from app.services.checkins import (
     DELIVERY_PASSED,
     PICKUP_PASSED,
@@ -980,25 +981,34 @@ def _ingest_email_message(db: Session, message: dict, llm: LlmProvider) -> None:
         if content.startswith(b"%PDF") and len(content) <= 15 * 1024 * 1024:
             filename = Path(filename).name[:255]
             extracted = llm.extract_bol(content, filename).model_dump(mode="json")
-            db.add(
-                Communication(
-                    channel="email",
-                    load_id=load_id,
-                    kof_order_no=order_no,
-                    direction="inbound",
-                    from_addr=sender,
-                    subject=subject,
-                    content=body,
-                    tag="bol",
-                    attachment_file=BolFile(
-                        filename=filename, content=content, size_bytes=len(content)
-                    ),
-                    attachment_filename=filename,
-                    extracted=extracted,
-                    external_id=external_id,
-                )
+            communication = Communication(
+                channel="email",
+                load_id=load_id,
+                kof_order_no=order_no,
+                direction="inbound",
+                from_addr=sender,
+                subject=subject,
+                content=body,
+                tag="bol",
+                attachment_file=BolFile(
+                    filename=filename, content=content, size_bytes=len(content)
+                ),
+                attachment_filename=filename,
+                extracted=extracted,
+                external_id=external_id,
             )
+            db.add(communication)
             db.commit()
+            if order_no:
+                detect_update(
+                    db,
+                    order_no,
+                    "email",
+                    communication.id,
+                    text,
+                    message.get("received_at") or communication.created_at,
+                    llm,
+                )
             return
     if not related:
         return
@@ -1027,20 +1037,29 @@ def _ingest_email_message(db: Session, message: dict, llm: LlmProvider) -> None:
             db, sender, f"{subject}\n{body}", "email", external_id, llm, load_id=load_id
         )
         return
-    db.add(
-        Communication(
-            load_id=load_id,
-            kof_order_no=order_no,
-            channel="email",
-            direction="inbound",
-            from_addr=sender,
-            subject=subject,
-            content=body,
-            tag="availability",
-            external_id=external_id,
-        )
+    communication = Communication(
+        load_id=load_id,
+        kof_order_no=order_no,
+        channel="email",
+        direction="inbound",
+        from_addr=sender,
+        subject=subject,
+        content=body,
+        tag="availability",
+        external_id=external_id,
     )
+    db.add(communication)
     db.commit()
+    if order_no:
+        detect_update(
+            db,
+            order_no,
+            "email",
+            communication.id,
+            text,
+            message.get("received_at") or communication.created_at,
+            llm,
+        )
 
 
 @dev_public.post("/dev/simulate/sms-reply")

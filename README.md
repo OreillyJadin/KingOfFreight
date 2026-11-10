@@ -241,10 +241,39 @@ whose subject/body match an existing operational reference or non-deleted KOF
 order/PO are persisted. Other PDFs and MC-only/unrelated emails are discarded.
 Saved records include sender, subject/body, external ID, matching load/order IDs,
 tag, ingestion timestamp, and (for accepted PDFs) the first valid PDF's filename,
-bytes, size, and extracted fields. Received time is not currently persisted.
-No summaries or draft emails are generated. Ambiguous identifiers are retained
+bytes, size, and extracted fields. For classified KOF carrier updates, source references,
+an original-message excerpt and received time are also saved with the approval draft.
+Ambiguous identifiers are retained
 without claiming a unique order match. Reconnect status appears in Settings if
 Microsoft revokes or expires the refresh token.
+
+### Customer update approval queue
+
+Inbound email uniquely matched to a KOF order and matched KOF SMS replies are
+classified using the selected LLM (with conservative local heuristic fallback).
+Detected updates create one pending draft per order in **Customer updates**. Newer
+updates refresh the suggested note, preserving the saved To address. These are
+unconfirmed carrier reports; no KOF stage or sync-owned data is changed.
+
+Review/edit To, subject and body, then **Approve & Send**. Save draft keeps edits
+without sending. Version checks reject stale previews. Approval uses the selected
+email provider, records the exact outbound message and is idempotent. Mock email
+marks the draft sent but sends no real email; the queue displays a warning.
+A durable send claim blocks duplicate attempts, including after an uncertain
+provider failure. Check Outlook Sent mail before dismissing such a draft; there
+is no automatic retry. Updates arriving during a send are retained for a new draft.
+The assistant can list the queue but cannot approve or send customer emails.
+
+There is no typed customer-billing email on `kof_loads` or `kof_customers`.
+`shipper_email` and `consignee_email` identify facilities, not necessarily the
+customer, and are deliberately not used. Prefill prefers the broker-approved
+address in the app-owned `customer_contacts`, then explicit Customer Email /
+Customer Contact Email in load raw data, then Email / Email Address / Contact
+Email / Customer Email / Customer Contact Email in a uniquely name-matched KOF
+customer's raw directory row. These optional raw fields depend on the synced
+list's columns. Otherwise To is blank and must be entered before sending.
+An approved address is remembered by KOF customer key when uniquely resolvable,
+otherwise by normalized customer name; ambiguous duplicate names are not guessed.
 
 Live LLM mode submits PDF document blocks to
 Anthropic using the checked-in prompts and forced tool calls. Live FMCSA calls
