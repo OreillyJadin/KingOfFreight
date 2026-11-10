@@ -114,7 +114,7 @@ export default function Login() {
                   />
                 </span>
               </label>
-              <p className="-mt-2 text-xs text-muted">First time signing in? Enter your username and leave the password blank.</p>
+              <p className="-mt-2 text-xs text-muted">First time signing in? Use the temporary password you were given.</p>
               {error && (
                 <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger-ink" role="alert">
                   {error}
