@@ -20,6 +20,7 @@ from app.models import (
 from app.routers.kof import _latest_note, _parse_note_entries
 from app.services.kof_credentials import get_kof_credentials
 from app.services.kof_messages import recipient_contact, thread
+from app.services.customer_updates import draft_dict, pending
 
 LIMIT = 20
 
@@ -269,6 +270,17 @@ class AssistantTools:
             }
         return {"loads": results[:LIMIT], "limit": LIMIT}
 
+    def list_pending_customer_updates(self) -> dict:
+        rows = pending(self.db)
+        return compact(
+            {
+                "count": len(rows),
+                "drafts": [draft_dict(self.db, row) for row in rows[:LIMIT]],
+                "queue_url": "/customer-updates",
+                "instruction": "Review the exact preview in Customer updates. Only the broker can approve and send.",
+            }
+        )
+
     def get_load_status(self, source: str, id: int) -> dict:
         if source not in {"kof", "operational"}:
             return {"error": "source must be kof or operational"}
@@ -301,6 +313,14 @@ class AssistantTools:
                     ),
                     "notes_may_be_incomplete": True,
                     "messages": thread(self.db, id, limit=10),
+                    "pending_customer_update": next(
+                        (
+                            draft_dict(self.db, row)
+                            for row in pending(self.db)
+                            if row.order_no == id
+                        ),
+                        None,
+                    ),
                 }
             )
         updates = self.db.scalars(

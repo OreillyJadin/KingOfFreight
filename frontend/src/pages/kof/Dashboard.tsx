@@ -5,6 +5,7 @@ import { BarChart3 } from "lucide-react";
 import { kof } from "../../kof/api";
 import { ErrorState, PageHeading } from "../../components/common";
 import { Card, Tabs } from "../../components/ui";
+import CustomerUpdatesSummary from "../../components/CustomerUpdatesSummary";
 import {
   CountCell,
   DataTable,
@@ -116,6 +117,7 @@ export default function Dashboard() {
     return (
       <>
         {heading}
+        <CustomerUpdatesSummary />
         <KofConnectionEmptyState />
       </>
     );
@@ -124,6 +126,7 @@ export default function Dashboard() {
   return (
     <>
       {heading}
+      <div className="mb-5"><CustomerUpdatesSummary /></div>
       <section aria-label="Key figures" className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {summary.isPending ? (
           Array.from({ length: 4 }, (_, index) => <KpiSkeleton key={index} />)

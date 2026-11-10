@@ -14,6 +14,7 @@ from app.integrations.llm import LlmProvider
 from app.integrations.sms import SmsProvider
 from app.models import Communication, KofLoad, KofMessage, utcnow
 from app.services.checkins import handle_driver_reply, normalize_contact
+from app.services.customer_updates import detect_update
 from app.services.preferences import get_prefs
 from app.services.twilio_credentials import get_twilio_credentials
 
@@ -219,3 +220,6 @@ def handle_kof_sms(
             select(KofMessage.id).where(KofMessage.external_id == external_id)
         ):
             raise
+        return
+    if row.order_no:
+        detect_update(db, row.order_no, "sms", row.id, body, row.created_at, llm)

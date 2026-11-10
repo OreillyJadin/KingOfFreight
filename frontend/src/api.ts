@@ -97,7 +97,19 @@ const json = (method: string, body?: unknown): RequestInit => ({
   ...(body === undefined ? {} : { body: JSON.stringify(body) }),
 });
 
+export type CustomerUpdateDraft = {
+  id: number; order_no: number; customer: string | null;
+  source_refs: { channel: string; id: number; excerpt: string; received_at: string }[];
+  summary: string; status: string; eta: string | null; confidence: number;
+  to_email: string; subject: string; body: string; state: "pending" | "sent" | "dismissed";
+  version: number; updated_at: string; send_started_at: string | null; error: string | null;
+};
+
 export const api = {
+  customerUpdates: () => request<{ count: number; drafts: CustomerUpdateDraft[]; email_mode: "outlook" | "graph" | "mock" }>("/customer-updates"),
+  editCustomerUpdate: (id: number, body: { version: number; to_email: string; subject: string; body: string }) => request<CustomerUpdateDraft>(`/customer-updates/${id}`, json("PATCH", body)),
+  approveCustomerUpdate: (id: number, version: number) => request<CustomerUpdateDraft>(`/customer-updates/${id}/approve`, json("POST", { version })),
+  dismissCustomerUpdate: (id: number, version: number) => request<CustomerUpdateDraft>(`/customer-updates/${id}/dismiss`, json("POST", { version })),
   integrationsStatus: () => request<{ llm: "anthropic" | "mock"; sms: "twilio" | "mock"; twilio_configured: boolean }>("/integrations/status"),
   kofMessages: (orderNo: number) => request<KofMessage[]>(`/kof/loads/${orderNo}/messages`),
   sendKofText: (orderNo: number, recipient: KofTextAction["recipient"], body: string) => request<KofMessage>(`/kof/loads/${orderNo}/messages`, json("POST", { recipient, body })),

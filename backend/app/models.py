@@ -326,6 +326,53 @@ class User(Base):
     )
 
 
+class CustomerContact(Base):
+    __tablename__ = "customer_contacts"
+    customer_key: Mapped[str] = mapped_column(String(300), primary_key=True)
+    email: Mapped[str] = mapped_column(String(320))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
+class CustomerUpdateDraft(Base):
+    __tablename__ = "customer_update_drafts"
+    __table_args__ = (
+        Index(
+            "uq_customer_update_pending",
+            "order_no",
+            unique=True,
+            postgresql_where=text("state = 'pending'"),
+            sqlite_where=text("state = 'pending'"),
+        ),
+    )
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_no: Mapped[int] = mapped_column(ForeignKey("kof_loads.order_no"), index=True)
+    source_refs: Mapped[list[dict[str, Any]]] = mapped_column(JSON, default=list)
+    summary: Mapped[str] = mapped_column(Text)
+    status: Mapped[str] = mapped_column(String(30))
+    eta: Mapped[str | None] = mapped_column(String(250), nullable=True)
+    confidence: Mapped[float] = mapped_column(Numeric(4, 3))
+    to_email: Mapped[str] = mapped_column(String(320), default="")
+    subject: Mapped[str] = mapped_column(String(500))
+    body: Mapped[str] = mapped_column(Text)
+    state: Mapped[str] = mapped_column(String(20), default="pending", index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+    sent_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    send_started_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class KofMessage(Base):
     __tablename__ = "kof_messages"
 

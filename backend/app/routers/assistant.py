@@ -79,6 +79,11 @@ def delete_connection(db: Session = Depends(get_db)) -> None:
 
 
 TOOL_ARGUMENTS = {
+    "list_pending_customer_updates": (
+        {},
+        [],
+        "List customer updates awaiting broker review. Read-only; direct the broker to /customer-updates to approve exact previews. Never sends email.",
+    ),
     "draft_driver_text": (
         {
             "order_no": {"type": "integer", "minimum": 1},
@@ -175,6 +180,7 @@ Nothing is sent without the broker reviewing the exact preview and tapping Send.
 When asked to text or check with a KOF carrier, first look up the order, PO and lane, then call draft_driver_text.
 Draft a short message citing order #, PO when recorded, and lane. Sign it with {prefs.broker_name} / {prefs.broker_company}.
 Tell the user to review and tap Send. Never claim a draft was sent. For 'did they reply', read messages using get_load_status.
+For updates owed to customers, use list_pending_customer_updates and direct the broker to /customer-updates. Never send or approve customer emails; only the broker can approve the exact preview in the queue.
 Ambiguous replies are not confirmed matches; report candidate orders and ask for clarification. All inbound parsed status is unconfirmed.
 Give short answers suited to a customer phone call. Always cite order # and source (KOF or operational);
 Reply in plain text, without markdown formatting. Short lines or simple '- ' bullets are fine.

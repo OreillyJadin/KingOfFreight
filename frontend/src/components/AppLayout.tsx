@@ -29,6 +29,7 @@ import ThemeToggle from "./ThemeToggle";
 import AssistantWidget from "./AssistantWidget";
 
 const tabs = [
+  { to: "/customer-updates", label: "Customer updates", icon: Mail, key: "customer-updates" },
   { to: "/inbox", label: "Inbox", icon: Mail, key: "inbox" },
   { to: "/truckstop", label: "TruckStop", icon: Truck, key: "truckstop" },
   { to: "/status", label: "Delivery Status", icon: Boxes, key: "delivery" },
@@ -46,6 +47,7 @@ const kofTabs = [
 
 const mobileTabs = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard, key: "" },
+  { to: "/customer-updates", label: "Updates", icon: Mail, key: "customer-updates" },
   { to: "/tracking", label: "Tracking", icon: Radar, key: "" },
   { to: "/loads", label: "Loads", icon: Package, key: "" },
   { to: "/status", label: "Status", icon: Boxes, key: "delivery" },
@@ -225,10 +227,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const pendingItems = pending.data ?? [];
   const totalAttention = alertItems.length + pendingItems.length;
   const countFor = (key: string) => {
+    if (key === "customer-updates") return customerUpdates.data?.count ?? 0;
     if (key === "inbox") return inbox.data?.length ?? 0;
     if (key === "truckstop") return truckstop.data?.length ?? 0;
     return delivery.data?.length ?? 0;
   };
+  const customerUpdates = useQuery({ queryKey: ["customer-updates"], queryFn: api.customerUpdates, refetchInterval: 30000 });
   async function logout() {
     await api.logout();
     await queryClient.clear();

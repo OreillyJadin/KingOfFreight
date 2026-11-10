@@ -10,6 +10,16 @@ class ORMModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class CarrierUpdate(BaseModel):
+    is_update: bool
+    status: Literal[
+        "loaded", "picked_up", "in_transit", "delayed", "delivered", "other"
+    ]
+    eta: str | None = Field(default=None, max_length=250)
+    summary: str = Field(max_length=500)
+    confidence: float = Field(ge=0, le=1)
+
+
 def _validate_stop_timezone(value: Any) -> Any:
     if value is None:
         return None

@@ -4,6 +4,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { api } from "./api";
 import AppLayout from "./components/AppLayout";
 import Inbox from "./pages/Inbox";
+import CustomerUpdates from "./pages/CustomerUpdates";
 import Login from "./pages/Login";
 import Status from "./pages/Status";
 import Settings from "./pages/Settings";
@@ -42,6 +43,7 @@ function ProtectedApp() {
         <Route path="/carriers" element={<Carriers />} />
         <Route path="/sales" element={<Sales />} />
         <Route path="/inbox" element={<Inbox />} />
+        <Route path="/customer-updates" element={<CustomerUpdates />} />
         <Route path="/truckstop" element={<TruckStop />} />
         <Route path="/status" element={<Status />} />
         <Route path="/settings" element={<Settings />} />
