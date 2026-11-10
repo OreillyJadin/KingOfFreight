@@ -332,6 +332,18 @@ class User(Base):
     )
 
 
+class TeamMember(Base):
+    __tablename__ = "team_members"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(120))
+    __table_args__ = (Index("ix_team_members_name_ci", func.lower(name), unique=True),)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow
+    )
+
+
 class UsageEvent(Base):
     __tablename__ = "usage_events"
     __table_args__ = (
@@ -345,6 +357,10 @@ class UsageEvent(Base):
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     username: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    team_member_id: Mapped[int | None] = mapped_column(
+        ForeignKey("team_members.id", ondelete="SET NULL"), nullable=True
+    )
+    operator_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     event: Mapped[str] = mapped_column(String(80))
     path: Mapped[str | None] = mapped_column(String(160), nullable=True)
     device: Mapped[str] = mapped_column(String(10))

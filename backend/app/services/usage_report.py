@@ -42,7 +42,11 @@ def report(db: Session, days: int) -> dict:
         if stamp.tzinfo is None:
             stamp = stamp.replace(tzinfo=timezone.utc)
         stamp = stamp.astimezone(zone)
-        key = (row.user_id, row.username)
+        key = (
+            ("operator", row.operator_name)
+            if row.operator_name
+            else ("user", row.user_id, row.username)
+        )
         day = daily[stamp.date().isoformat()]
         day["users"].add(key)
         user = users.setdefault(
@@ -50,7 +54,9 @@ def report(db: Session, days: int) -> dict:
             {
                 "user_id": row.user_id,
                 "username": row.username,
-                "label": row.username or "shared login",
+                "label": row.operator_name or row.username or "shared login",
+                "operator_name": row.operator_name,
+                "team_member_id": row.team_member_id,
                 "last_seen": None,
                 "page_views": 0,
                 "questions": 0,
@@ -77,7 +83,9 @@ def report(db: Session, days: int) -> dict:
             questions.append(
                 {
                     "username": row.username,
-                    "user": row.username or "shared login",
+                    "user": row.operator_name or row.username or "shared login",
+                    "operator_name": row.operator_name,
+                    "team_member_id": row.team_member_id,
                     "time": stamp.isoformat(),
                     "text": text[:300] if isinstance(text, str) else "",
                 }

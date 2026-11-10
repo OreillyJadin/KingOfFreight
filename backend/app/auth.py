@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.config import get_settings
 from app.db import SessionLocal, get_db
-from app.models import User
+from app.models import TeamMember, User
 
 COOKIE_NAME = "broker_session"
 _SCRYPT_N = 2**14
@@ -31,7 +31,10 @@ def _serializer() -> URLSafeTimedSerializer:
 
 
 def create_session(
-    uid: int | None = None, password_version: int | None = None, role: str | None = None
+    uid: int | None = None,
+    password_version: int | None = None,
+    role: str | None = None,
+    team_member_id: int | None = None,
 ) -> str:
     return _serializer().dumps(
         {
@@ -39,6 +42,7 @@ def create_session(
             "uid": uid,
             "password_version": password_version,
             "role": role,
+            "team_member_id": team_member_id,
         }
     )
 
@@ -85,7 +89,7 @@ def require_broker(request: Request, db: Session = Depends(get_db)) -> User | No
             detail="Broker authentication required",
         )
     if payload.get("uid") is None:
-        request.state.usage_identity = (None, None)
+        set_usage_identity(request, None, payload, db)
         return None
     user = session_user(payload, db)
     if user is None:
@@ -93,8 +97,22 @@ def require_broker(request: Request, db: Session = Depends(get_db)) -> User | No
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Broker authentication required",
         )
-    request.state.usage_identity = (user.id, user.username)
+    set_usage_identity(request, user, payload, db)
     return user
+
+
+def set_usage_identity(
+    request: Request, user: User | None, payload: dict, db: Session
+) -> None:
+    member_id = payload.get("team_member_id")
+    member = db.get(TeamMember, member_id) if type(member_id) is int else None
+    request.state.operator = member if member is not None and member.is_active else None
+    request.state.usage_identity = (
+        user.id if user else None,
+        user.username if user else None,
+        request.state.operator.id if request.state.operator else None,
+        request.state.operator.name if request.state.operator else None,
+    )
 
 
 def password_matches(candidate: str) -> bool:

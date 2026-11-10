@@ -22,6 +22,7 @@ from app.routers.api import _ingest_email_message, dev_public, protected, public
 from app.routers.auth import router as auth_router
 from app.routers.admin import router as admin_router
 from app.routers.usage import router as usage_router
+from app.routers.team_members import router as team_members_router
 from app.routers.assistant import router as assistant_router
 from app.routers.twilio import router as twilio_router
 from app.routers.outlook import router as outlook_router
@@ -169,6 +170,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(usage_router)
+app.include_router(team_members_router)
 app.include_router(assistant_router)
 app.include_router(twilio_router)
 app.include_router(outlook_router)

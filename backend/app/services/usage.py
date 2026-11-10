@@ -77,7 +77,10 @@ def record_event(
     detail: dict | None = None,
 ) -> bool:
     try:
-        user_id, username = identity
+        user_id, username = identity[:2]
+        team_member_id, operator_name = (
+            identity[2:] if len(identity) == 4 else (None, None)
+        )
         now = utcnow()
         device = device_type(user_agent)
         with SessionLocal() as db:
@@ -89,6 +92,7 @@ def record_event(
                         UsageEvent.event == event,
                         UsageEvent.user_id == user_id,
                         UsageEvent.username == username,
+                        UsageEvent.team_member_id == team_member_id,
                         UsageEvent.path == path,
                         UsageEvent.device == device,
                         UsageEvent.created_at >= now - timedelta(seconds=5),
@@ -102,6 +106,8 @@ def record_event(
                 UsageEvent(
                     user_id=user_id,
                     username=username,
+                    team_member_id=team_member_id,
+                    operator_name=operator_name,
                     event=event,
                     path=path,
                     device=device,

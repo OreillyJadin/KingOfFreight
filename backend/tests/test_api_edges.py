@@ -58,6 +58,8 @@ def test_auth_public_routes_and_twilio_signature(client, db, load_data, monkeypa
         "must_set_password": False,
         "role": None,
         "can_claim_admin": True,
+        "operator": None,
+        "team_members_exist": False,
     }
     session_cookie = client.cookies.get(COOKIE_NAME)
     assert session_cookie and "test-password" not in session_cookie
@@ -66,6 +68,7 @@ def test_auth_public_routes_and_twilio_signature(client, db, load_data, monkeypa
         "uid": None,
         "password_version": None,
         "role": None,
+        "team_member_id": None,
     }
 
 

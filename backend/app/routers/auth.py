@@ -14,7 +14,7 @@ from app.auth import (
 )
 from app.config import get_settings
 from app.db import get_db
-from app.models import User, utcnow
+from app.models import TeamMember, User, utcnow
 from app.services.preferences import get_prefs
 from app.services.usage import feature_event
 
@@ -35,7 +35,9 @@ class ChangePasswordRequest(BaseModel):
     new_password: str = Field(min_length=10)
 
 
-def _set_session_cookie(response: Response, user: User | None = None) -> None:
+def _set_session_cookie(
+    response: Response, user: User | None = None, team_member_id: int | None = None
+) -> None:
     secure = get_settings().public_base_url.startswith("https://")
     response.set_cookie(
         COOKIE_NAME,
@@ -43,6 +45,7 @@ def _set_session_cookie(response: Response, user: User | None = None) -> None:
             user.id if user is not None else None,
             user.password_version if user is not None else None,
             user.role if user is not None else None,
+            team_member_id,
         ),
         httponly=True,
         secure=secure,
@@ -104,8 +107,10 @@ def logout(response: Response) -> dict[str, bool]:
 
 @router.get("/me")
 def me(
-    user: User | None = Depends(require_broker), db: Session = Depends(get_db)
-) -> dict[str, bool | str | None]:
+    request: Request,
+    user: User | None = Depends(require_broker),
+    db: Session = Depends(get_db),
+) -> dict:
     return {
         "authenticated": True,
         "broker_timezone": get_prefs(db).broker_timezone,
@@ -113,11 +118,53 @@ def me(
         "must_set_password": user.must_set_password if user is not None else False,
         "role": user.role if user is not None else None,
         "can_claim_admin": user is None and not admin_exists(db),
+        "operator": {
+            "id": request.state.operator.id,
+            "name": request.state.operator.name,
+        }
+        if request.state.operator
+        else None,
+        "team_members_exist": db.scalar(
+            select(TeamMember.id).where(TeamMember.is_active.is_(True)).limit(1)
+        )
+        is not None,
     }
+
+
+class OperatorInput(BaseModel):
+    team_member_id: int | None = Field(default=None, strict=True, gt=0)
+
+
+@router.post("/operator")
+def operator(
+    payload: OperatorInput,
+    request: Request,
+    response: Response,
+    user: User | None = Depends(require_broker),
+    db: Session = Depends(get_db),
+) -> dict:
+    member = (
+        db.get(TeamMember, payload.team_member_id)
+        if payload.team_member_id is not None
+        else None
+    )
+    if payload.team_member_id is not None and (member is None or not member.is_active):
+        raise HTTPException(422, "Team member is unavailable")
+    _set_session_cookie(response, user, member.id if member else None)
+    request.state.operator = member
+    request.state.usage_identity = (
+        user.id if user else None,
+        user.username if user else None,
+        member.id if member else None,
+        member.name if member else None,
+    )
+    feature_event(request, "operator_switched")
+    return me(request, user, db)
 
 
 @router.post("/set-password")
 def set_password(
+    request: Request,
     payload: SetPasswordRequest,
     response: Response,
     user: User | None = Depends(require_broker),
@@ -129,12 +176,15 @@ def set_password(
     user.password_version += 1
     user.must_set_password = False
     db.commit()
-    _set_session_cookie(response, user)
+    _set_session_cookie(
+        response, user, request.state.operator.id if request.state.operator else None
+    )
     return {"ok": True}
 
 
 @router.post("/change-password")
 def change_password(
+    request: Request,
     payload: ChangePasswordRequest,
     response: Response,
     user: User | None = Depends(require_broker),
@@ -147,5 +197,7 @@ def change_password(
     user.password_hash = hash_password(payload.new_password)
     user.password_version += 1
     db.commit()
-    _set_session_cookie(response, user)
+    _set_session_cookie(
+        response, user, request.state.operator.id if request.state.operator else None
+    )
     return {"ok": True}

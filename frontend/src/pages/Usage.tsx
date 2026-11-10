@@ -7,6 +7,7 @@ import { Button, Card, Tabs } from "../components/ui";
 import { formatDateTime } from "../utils";
 
 const featureLabels: Record<string, string> = {
+  operator_switched: "Operator switches",
   assistant_opened: "Assistant opened", assistant_question: "Assistant questions", suggestion_clicked: "Suggestion chips",
   bol_upload_extract: "BOL upload & extract", kof_manual_sync: "Manual KOF sync", kof_text_send: "KOF texts sent",
   kof_email_send: "KOF emails sent", customer_update_approve: "Customer updates approved", customer_update_dismiss: "Customer updates dismissed",
@@ -34,7 +35,7 @@ export default function Usage() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {([["Events", data.totals.events], ["Active users", data.totals.active_users], ["Questions", data.totals.chat_questions], ["Page views", data.totals.page_views]] as const).map(([label, count]) => <Card key={label} className="p-4"><p className="text-xs font-semibold text-muted">{label}</p><p className="mt-2 text-3xl font-extrabold tabular-nums">{count.toLocaleString()}</p></Card>)}
       </div>
-      <p className="text-xs leading-relaxed text-muted">Calendar days and times use {data.timezone}. Shared-password sessions count as one “shared login”, not individual people. Questions are counted once by the server, including provider failures. Activity is retained for 180 days.</p>
+      <p className="text-xs leading-relaxed text-muted">Calendar days and times use {data.timezone}. Activity is grouped by selected operator, then username, then “shared login”. Operator names are self-selected, not separate accounts. Questions are counted once by the server, including provider failures. Activity is retained for 180 days.</p>
       <Card className="min-w-0 p-5">
         <h2 className="text-lg font-bold">Daily activity</h2>
         <div className="mt-2 flex flex-wrap gap-4 text-xs text-muted"><span><span className="mr-1 inline-block h-2 w-2 rounded-sm bg-st-booked" />Active users</span><span><span className="mr-1 inline-block h-2 w-2 rounded-sm bg-st-picked" />Questions</span></div>
@@ -55,7 +56,7 @@ export default function Usage() {
         <h2 className="text-lg font-bold">By user</h2>
         {!data.users.length ? <p className="mt-3 text-sm text-muted">No users active in this range.</p> : <div className="mt-4 overflow-x-auto" tabIndex={0} role="region" aria-label="Per-user activity; scroll for all columns">
           <table className="w-full min-w-[650px] text-left text-sm"><thead className="border-b border-line text-xs text-muted"><tr>{["User / last seen", "Views", "Questions", "Top page", "Device events"].map(label => <th key={label} className="px-3 py-3 font-semibold first:pl-0">{label}</th>)}</tr></thead>
-            <tbody className="divide-y divide-line">{data.users.map(user => <tr key={`${user.user_id}:${user.username}`}><td className="max-w-52 py-4 pr-3"><p className="break-words font-semibold">{user.label}</p><p className="mt-1 text-xs text-muted">{formatDateTime(user.last_seen)}</p></td><td className="px-3 py-4 tabular-nums">{user.page_views}</td><td className="px-3 py-4 tabular-nums">{user.questions}</td><td className="px-3 py-4 text-fg-2">{user.top_page ?? "—"}</td><td className="px-3 py-4 text-xs text-muted">{Object.entries(user.devices).map(([device, count]) => `${device}: ${count}`).join(" · ")}</td></tr>)}</tbody>
+            <tbody className="divide-y divide-line">{data.users.map(user => <tr key={`${user.team_member_id}:${user.operator_name}:${user.user_id}:${user.username}`}><td className="max-w-52 py-4 pr-3"><p className="break-words font-semibold">{user.label}</p><p className="mt-1 text-xs text-muted">{formatDateTime(user.last_seen)}</p></td><td className="px-3 py-4 tabular-nums">{user.page_views}</td><td className="px-3 py-4 tabular-nums">{user.questions}</td><td className="px-3 py-4 text-fg-2">{user.top_page ?? "—"}</td><td className="px-3 py-4 text-xs text-muted">{Object.entries(user.devices).map(([device, count]) => `${device}: ${count}`).join(" · ")}</td></tr>)}</tbody>
           </table>
         </div>}
       </Card>

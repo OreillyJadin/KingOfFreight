@@ -29,6 +29,7 @@ import { Badge, Button, Card } from "./ui";
 import { Wordmark } from "./Brand";
 import ThemeToggle from "./ThemeToggle";
 import AssistantWidget from "./AssistantWidget";
+import OperatorChooser from "./OperatorChooser";
 import { useCapabilities } from "../useCapabilities";
 import AdminClaimBanner from "./AdminClaimBanner";
 
@@ -162,6 +163,7 @@ function AlertsPanel({
 export default function AppLayout({ children }: { children: ReactNode }) {
   const auth = useQuery({ queryKey: ["auth"], queryFn: api.me });
   const isAdmin = auth.data?.role === "admin";
+  const [operatorOpen, setOperatorOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -255,6 +257,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     alertsTrigger.current = trigger;
     setAlertsOpen(true);
   }
+  const forcedOperator = auth.data?.team_members_exist && !auth.data.operator && !isAdmin;
+  if (forcedOperator || operatorOpen) return <OperatorChooser onSelected={() => setOperatorOpen(false)} onCancel={!forcedOperator ? () => setOperatorOpen(false) : undefined} allowClear={isAdmin} onLogout={() => void logout()} />;
   return (
     <div className="min-h-screen bg-bg pb-24 text-fg md:pb-0">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[200] rounded-lg bg-surface px-4 py-2 text-sm font-semibold text-fg shadow-card">Skip to content</a>
@@ -380,6 +384,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </aside>
+      <header className="sticky top-0 z-30 hidden justify-end border-b border-line bg-surface/90 px-6 py-2 backdrop-blur md:ml-60 md:flex"><button className="min-h-11 max-w-full break-words text-sm font-semibold" onClick={() => setOperatorOpen(true)} aria-label="Switch operator">Using as {auth.data?.operator?.name ?? "login identity"} · Switch</button></header>
       <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur md:hidden">
         <div className="mx-auto flex h-[68px] max-w-6xl items-center justify-between px-4 sm:px-6">
           <NavLink to="/dashboard" className="flex min-w-0 items-center gap-2.5">
@@ -440,6 +445,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </Button>
           </div>
         </div>
+        <div className="border-t border-line px-4"><button className="min-h-11 w-full break-words py-2 text-left text-sm font-semibold" onClick={() => setOperatorOpen(true)} aria-label="Switch operator">Using as {auth.data?.operator?.name ?? "login identity"} <span className="text-muted">· Switch</span></button></div>
       </header>
       <main id="main" tabIndex={-1} className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 md:pb-10 md:pl-60 focus:outline-none">
         {!auth.data?.username && auth.data?.can_claim_admin && <AdminClaimBanner />}
