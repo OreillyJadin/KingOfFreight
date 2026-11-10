@@ -786,8 +786,9 @@ function LoadStatusDetail({ load }: { load: Load }) {
 }
 
 export default function Status() {
-  const [includeDelivered, setIncludeDelivered] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [showDelivered, setShowDelivered] = useState(false);
+  const includeDelivered = showDelivered || searchParams.get("include_delivered") === "true";
   const wide = useMediaQuery("(min-width: 1280px)");
   const loads = useQuery({
     queryKey: ["loads", "delivery", includeDelivered],
@@ -852,7 +853,12 @@ export default function Status() {
             <input
               type="checkbox"
               checked={includeDelivered}
-              onChange={(event) => setIncludeDelivered(event.target.checked)}
+              onChange={(event) => {
+                setShowDelivered(event.target.checked);
+                const next = new URLSearchParams(searchParams);
+                next.delete("include_delivered");
+                setSearchParams(next);
+              }}
               className="h-4 w-4 accent-accent"
             />
             Show delivered

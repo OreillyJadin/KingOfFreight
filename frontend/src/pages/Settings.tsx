@@ -7,6 +7,7 @@ import type { BrokerPrefs, BrokerPrefsUpdate } from "../types";
 import { setBrokerTimeZone } from "../utils";
 import { useToast } from "../useToast";
 import { ChangePasswordCard, KofSyncCard } from "../kof/SettingsSections";
+import AssistantSettings from "../components/AssistantSettings";
 
 const timezones = [
   ["Eastern", "America/New_York"],
@@ -201,6 +202,7 @@ export default function Settings() {
         </Button>
       </form>
       <div className="mt-8 space-y-5">
+        <AssistantSettings />
         <KofSyncCard />
         <ChangePasswordCard />
       </div>

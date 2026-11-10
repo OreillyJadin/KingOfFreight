@@ -26,6 +26,7 @@ import { formatClock } from "../utils";
 import { Badge, Button, Card } from "./ui";
 import { Wordmark } from "./Brand";
 import ThemeToggle from "./ThemeToggle";
+import AssistantWidget from "./AssistantWidget";
 
 const tabs = [
   { to: "/inbox", label: "Inbox", icon: Mail, key: "inbox" },
@@ -453,6 +454,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           ))}
         </div>
       </nav>
+      <AssistantWidget />
     </div>
   );
 }
