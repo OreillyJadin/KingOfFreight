@@ -198,6 +198,7 @@ def test_chat_tool_loop(client, db, monkeypatch):
     assert response.json() == {
         "reply": "KOF order #123 is recorded in transit.",
         "loads": [{"source": "kof", "id": 123, "label": "Order #123"}],
+        "actions": [],
     }
     assert provider.messages.create.call_count == 2
     assert "tool_result" in str(provider.messages.create.call_args.kwargs["messages"])

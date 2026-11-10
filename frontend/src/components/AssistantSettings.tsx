@@ -36,7 +36,7 @@ export default function AssistantSettings() {
   return (
     <Card as="section" id="assistant" className="scroll-mt-24 p-5 sm:p-6" aria-labelledby="assistant-settings-title">
       <h2 id="assistant-settings-title" className="text-lg font-bold text-fg">AI assistant and document processing</h2>
-      <p className="mt-1 text-sm leading-relaxed text-muted">This Claude key powers the read-only assistant and, when the server uses Anthropic, BOL PDF extraction and driver-reply parsing. The assistant sends no messages and changes no loads.</p>
+      <p className="mt-1 text-sm leading-relaxed text-muted">This Claude key powers the assistant and, when the server uses Anthropic, BOL PDF extraction and driver-reply parsing. KOF texts require your approval of the exact preview. Load stages are never changed.</p>
       {connection.isPending ? <Skeleton className="mt-4 h-11 w-full" /> : connection.isError ? <div role="alert" className="mt-4 text-sm text-danger-ink"><p>{connection.error.message}</p><Button className="mt-2 min-h-11" onClick={() => void connection.refetch()}>Retry</Button></div> : <>
         <p className="mt-4 text-sm font-semibold text-fg-2">{source === "env" ? "Using server key — save a key here to override" : source === "app" ? "Saved in app" : "Not set up"}</p>
           <form className="mt-4 space-y-3" onSubmit={(event) => { event.preventDefault(); setError(""); save.mutate(key.trim()); }}>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { Search } from "lucide-react";
+import KofMessageThread from "../../components/KofMessageThread";
 import { kof, type KofLoadRow } from "../../kof/api";
 import { ErrorState, PageHeading } from "../../components/common";
 import { ListDetail } from "../../components/ListDetail";
@@ -124,6 +125,7 @@ function Detail({ orderNo }: { orderNo: number }) {
           <p className="mt-1 whitespace-pre-line text-sm text-fg-2">{load.product_description}</p>
         </section>
       )}
+      <KofMessageThread orderNo={orderNo} />
 
       <section>
         <h3 className="text-[11px] font-bold uppercase tracking-[0.14em] text-muted">

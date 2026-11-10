@@ -323,6 +323,34 @@ class User(Base):
     )
 
 
+class KofMessage(Base):
+    __tablename__ = "kof_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    order_no: Mapped[int | None] = mapped_column(
+        ForeignKey("kof_loads.order_no"), index=True, nullable=True
+    )
+    direction: Mapped[str] = mapped_column(String(3))
+    to_phone: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    from_phone: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    body: Mapped[str] = mapped_column(Text)
+    external_id: Mapped[str | None] = mapped_column(
+        String(100), unique=True, nullable=True
+    )
+    status: Mapped[str] = mapped_column(String(20))
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
+    match_method: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    candidate_order_nos: Mapped[list[int]] = mapped_column(JSON, default=list)
+    parsed_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    parsed_eta: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    parsed_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class TwilioConnection(Base):
     __tablename__ = "twilio_connection"
     __table_args__ = (CheckConstraint("id = 1", name="ck_twilio_connection_singleton"),)

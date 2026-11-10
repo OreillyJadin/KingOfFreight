@@ -34,6 +34,16 @@ export type AssistantMessage = { role: "user" | "assistant"; content: string };
 export type AssistantReply = {
   reply: string;
   loads: { source: "kof" | "operational"; id: number; label: string }[];
+  actions?: KofTextAction[];
+};
+export type KofTextAction = { type: "send_kof_text"; order_no: number; recipient: "carrier" | "dispatch"; to_label: string; body: string };
+export type KofMessage = {
+  id: number; order_no: number | null; direction: "out" | "in";
+  to_phone: string | null; from_phone: string | null; body: string;
+  status: "sent" | "failed" | "received" | "ambiguous"; error: string | null;
+  created_at: string; match_method: string | null; candidate_order_nos: number[];
+  parsed_status: string | null; parsed_eta: string | null; parsed_summary: string | null;
+  confirmed: false;
 };
 
 export async function request<T>(
@@ -83,6 +93,9 @@ const json = (method: string, body?: unknown): RequestInit => ({
 });
 
 export const api = {
+  integrationsStatus: () => request<{ llm: "anthropic" | "mock"; sms: "twilio" | "mock"; twilio_configured: boolean }>("/integrations/status"),
+  kofMessages: (orderNo: number) => request<KofMessage[]>(`/kof/loads/${orderNo}/messages`),
+  sendKofText: (orderNo: number, recipient: KofTextAction["recipient"], body: string) => request<KofMessage>(`/kof/loads/${orderNo}/messages`, json("POST", { recipient, body })),
   twilioConnection: () => request<TwilioConnection>("/integrations/twilio/connection"),
   saveTwilioConnection: (body: TwilioInput) => request<TwilioConnection>("/integrations/twilio/connection", json("PUT", body)),
   removeTwilioConnection: () => request<void>("/integrations/twilio/connection", json("DELETE")),

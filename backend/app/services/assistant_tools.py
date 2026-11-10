@@ -1,6 +1,7 @@
 from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
+from fastapi import HTTPException
 from sqlalchemy import String, case, cast, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,7 @@ from app.models import (
 )
 from app.routers.kof import _latest_note, _parse_note_entries
 from app.services.kof_credentials import get_kof_credentials
+from app.services.kof_messages import recipient_contact, thread
 
 LIMIT = 20
 
@@ -41,6 +43,7 @@ def summary(load: KofLoad | Load) -> dict:
                 source="kof",
                 id=load.order_no,
                 order_no=load.order_no,
+                po=load.po,
                 label=f"Order #{load.order_no}",
                 stage=load.stage,
                 carrier=load.carrier,
@@ -75,6 +78,38 @@ class AssistantTools:
     def __init__(self, db: Session):
         self.db = db
         self.references: dict[tuple[str, int], dict] = {}
+        self.actions: list[dict] = []
+
+    def draft_driver_text(self, order_no: int, recipient: str, body: str) -> dict:
+        if (
+            recipient not in {"carrier", "dispatch"}
+            or not body.strip()
+            or len(body) > 1600
+        ):
+            return {
+                "error": "Choose carrier or dispatch and provide a nonblank message up to 1600 characters"
+            }
+        try:
+            load, _, label = recipient_contact(self.db, order_no, recipient)
+        except HTTPException as error:
+            return {"error": error.detail}
+        action = {
+            "type": "send_kof_text",
+            "order_no": order_no,
+            "recipient": recipient,
+            "to_label": label,
+            "body": body,
+        }
+        if len(self.actions) >= 4:
+            return {"error": "Review existing drafts before preparing more messages"}
+        if action not in self.actions:
+            self.actions.append(action)
+        self.remember(load)
+        return {
+            "pending_action": action,
+            "sent": False,
+            "instruction": "Ask the broker to review and tap Send. Nothing has been sent.",
+        }
 
     def remember(self, load: KofLoad | Load) -> dict:
         result = summary(load)
@@ -265,6 +300,7 @@ class AssistantTools:
                         load.notes_text, load.log_text, datetime.now(timezone.utc)
                     ),
                     "notes_may_be_incomplete": True,
+                    "messages": thread(self.db, id, limit=10),
                 }
             )
         updates = self.db.scalars(
