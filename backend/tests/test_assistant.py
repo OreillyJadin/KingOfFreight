@@ -100,7 +100,7 @@ def test_status_confirmed_and_proposed(db, load_data):
     assert AssistantTools(db).get_load_status("kof", 999) == {"error": "Load not found"}
 
 
-def test_connection_encrypted_and_env_precedence(client, db, monkeypatch):
+def test_connection_encrypted_and_app_precedence(client, db, monkeypatch):
     assert client.get("/api/assistant/connection").json() == {
         "configured": False,
         "source": None,
@@ -114,17 +114,27 @@ def test_connection_encrypted_and_env_precedence(client, db, monkeypatch):
     assert get_assistant_key(db) == ("test-app-key", "app")
     assert "test-app-key" not in client.get("/api/assistant/connection").text
     monkeypatch.setattr(get_settings(), "anthropic_api_key", "test-env-key")
+    assert get_assistant_key(db) == ("test-app-key", "app")
+    assert client.get("/api/assistant/connection").json() == {
+        "configured": True,
+        "source": "app",
+    }
+    assert client.put(
+        "/api/assistant/connection", json={"api_key": "other"}
+    ).json() == {"configured": True, "source": "app"}
+    assert get_assistant_key(db) == ("other", "app")
+    assert client.delete("/api/assistant/connection").status_code == 204
     assert get_assistant_key(db) == ("test-env-key", "env")
     assert client.get("/api/assistant/connection").json() == {
         "configured": True,
         "source": "env",
     }
+    monkeypatch.setattr(get_settings(), "anthropic_api_key", None)
+    assert get_assistant_key(db) is None
     assert (
-        client.put("/api/assistant/connection", json={"api_key": "other"}).status_code
-        == 409
+        client.put("/api/assistant/connection", json={"api_key": "   "}).status_code
+        == 422
     )
-    assert client.delete("/api/assistant/connection").status_code == 204
-    assert get_assistant_key(db) == ("test-env-key", "env")
 
 
 def test_missing_key_and_auth(client):
@@ -194,16 +204,52 @@ def test_chat_tool_loop(client, db, monkeypatch):
     assert "Broker timezone" in provider.messages.create.call_args.kwargs["system"]
 
 
-def test_provider_error(client, monkeypatch):
-    error = anthropic.APIConnectionError(
-        request=httpx.Request("POST", "https://api.anthropic.com")
-    )
+@pytest.mark.parametrize(
+    "error_type,status,message,expected",
+    [
+        (
+            anthropic.AuthenticationError,
+            401,
+            "invalid key",
+            "Claude API key was rejected",
+        ),
+        (anthropic.PermissionDeniedError, 403, "denied", "does not have permission"),
+        (anthropic.NotFoundError, 404, "missing", "model '{model}' not available"),
+        (anthropic.BadRequestError, 400, "Credit balance is too low", "out of credits"),
+        (anthropic.BadRequestError, 400, "Billing issue", "out of credits"),
+        (anthropic.BadRequestError, 400, "invalid request", "AI provider"),
+        (anthropic.BadRequestError, 400, "", "AI provider"),
+        (anthropic.RateLimitError, 429, "slow down", "rate limited"),
+        (anthropic.APIConnectionError, None, "", "unreachable"),
+        (anthropic.APITimeoutError, None, "", "unreachable"),
+        (anthropic.InternalServerError, 500, "failed", "AI provider"),
+    ],
+)
+def test_provider_error(
+    client, monkeypatch, caplog, error_type, status, message, expected
+):
+    request = httpx.Request("POST", "https://api.anthropic.com")
+    secret = "secret-key-must-not-leak"
+    if status is None:
+        error = error_type(request=request)
+    else:
+        error = error_type(
+            message + secret,
+            response=httpx.Response(status, request=request),
+            body={"error": {"message": message + secret}},
+        )
     fake_provider(monkeypatch, [error])
     response = client.post(
         "/api/assistant/chat", json={"messages": [{"role": "user", "content": "hello"}]}
     )
     assert response.status_code == 502
-    assert "AI provider" in response.json()["detail"]
+    assert (
+        expected.format(model=get_settings().anthropic_model)
+        in response.json()["detail"]
+    )
+    assert secret not in response.text
+    assert secret not in caplog.text
+    assert f"{error_type.__name__} status={status}" in caplog.text
 
 
 def test_history_bounds(client):
