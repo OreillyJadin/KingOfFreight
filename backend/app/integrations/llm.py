@@ -1,12 +1,24 @@
 import base64
+import logging
 import re
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
+import anthropic
 from pypdf import PdfReader
 
 from app.config import get_settings
+from app.db import SessionLocal
 from app.schemas import BolExtraction, ReplyParse
+from app.services.assistant_credentials import get_assistant_key
+
+logger = logging.getLogger(__name__)
+
+
+def _api_key() -> str | None:
+    with SessionLocal() as db:
+        credentials = get_assistant_key(db)
+    return credentials[0] if credentials else None
 
 
 class LlmProvider(Protocol):
@@ -87,11 +99,9 @@ class MockLlmProvider:
 
 
 class AnthropicLlmProvider:
-    def __init__(self, client: Any = None) -> None:
+    def __init__(self, client: Any = None, *, api_key: str | None = None) -> None:
         if client is None:
-            import anthropic
-
-            client = anthropic.Anthropic(api_key=get_settings().anthropic_api_key)
+            client = anthropic.Anthropic(api_key=api_key or _api_key())
         self.client = client
         self.model = get_settings().anthropic_model
 
@@ -257,9 +267,39 @@ class AnthropicLlmProvider:
         return ReplyParse.model_validate(self._tool_response(response, "record_status"))
 
 
-def get_llm_provider() -> LlmProvider:
+class FallbackLlmProvider:
+    def __init__(self, primary: LlmProvider) -> None:
+        self.primary = primary
+        self.fallback = MockLlmProvider()
+
+    def extract_bol(self, pdf_bytes: bytes, filename: str) -> BolExtraction:
+        try:
+            return self.primary.extract_bol(pdf_bytes, filename)
+        except (anthropic.AnthropicError, ValueError) as error:
+            logger.warning("BOL extraction fallback: %s", type(error).__name__)
+            return self.fallback.extract_bol(pdf_bytes, filename)
+
+    def parse_reply(self, reply_text: str, context: dict[str, Any]) -> ReplyParse:
+        try:
+            return self.primary.parse_reply(reply_text, context)
+        except (anthropic.AnthropicError, ValueError) as error:
+            logger.warning("Reply parsing fallback: %s", type(error).__name__)
+            return self.fallback.parse_reply(reply_text, context)
+
+
+def resolve_llm_mode(has_key: bool) -> Literal["anthropic", "mock"]:
     return (
-        AnthropicLlmProvider()
-        if get_settings().llm_provider == "anthropic"
-        else MockLlmProvider()
+        "anthropic"
+        if get_settings().llm_provider in {"auto", "anthropic"} and has_key
+        else "mock"
     )
+
+
+def get_llm_provider() -> LlmProvider:
+    mode = get_settings().llm_provider
+    key = _api_key() if mode in {"auto", "anthropic"} else None
+    if resolve_llm_mode(bool(key)) == "anthropic":
+        return FallbackLlmProvider(AnthropicLlmProvider(api_key=key))
+    if mode == "anthropic":
+        logger.warning("Anthropic key is not configured; using mock LLM fallback")
+    return MockLlmProvider()

@@ -84,8 +84,16 @@ add the provider credentials under the web service's Environment settings:
 `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `GRAPH_MAILBOX`,
 `ANTHROPIC_API_KEY`, and `FMCSA_WEBKEY`, along with the corresponding provider
 selectors (`SMS_PROVIDER`, `EMAIL_PROVIDER`, `LLM_PROVIDER`, and
-`FMCSA_PROVIDER`). Mock providers remain active when these selectors are not
-set.
+`FMCSA_PROVIDER`). SMS, email and FMCSA default to mock. LLM selection defaults
+to `auto`: a key saved in Settings (preferred) or `ANTHROPIC_API_KEY` enables
+Anthropic for BOL extraction and driver-reply parsing; no key uses the mock.
+Set `LLM_PROVIDER=mock` to explicitly disable Anthropic for those features.
+
+While signed in, open `/api/integrations/status` to see the selected `llm` and
+`sms` providers and `twilio_configured` without exposing credentials.
+`twilio_configured` means all three Twilio settings are nonblank, not that
+Twilio has validated them. The LLM status describes selection, not live health;
+Anthropic request failures fall back to local mock processing.
 
 For a manual Docker deployment, build from the repository root with
 `docker build -f backend/Dockerfile -t kingoffreight .`. Set `DATABASE_URL`,
@@ -117,7 +125,7 @@ Optional live provider settings and their credentials:
 |---|---|
 | Twilio SMS | `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` |
 | Microsoft Graph email | `EMAIL_PROVIDER=graph`, `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `GRAPH_MAILBOX` |
-| Anthropic LLM | `LLM_PROVIDER=anthropic`, `ANTHROPIC_API_KEY` (optional `ANTHROPIC_MODEL`) |
+| Anthropic LLM | `LLM_PROVIDER=auto` (default) or `anthropic`; save a key in Settings or set `ANTHROPIC_API_KEY` (optional `ANTHROPIC_MODEL`) |
 | FMCSA carrier verification | `FMCSA_PROVIDER=live`, `FMCSA_WEBKEY` |
 
 For Twilio, set the inbound SMS webhook to
@@ -177,7 +185,7 @@ All settings can be supplied in `.env` or as environment variables:
 | `GRAPH_CLIENT_ID` | empty | Graph client application ID |
 | `GRAPH_CLIENT_SECRET` | empty | Graph client secret |
 | `GRAPH_MAILBOX` | empty | Broker mailbox UPN |
-| `LLM_PROVIDER` | `mock` | `mock` or Anthropic `anthropic` |
+| `LLM_PROVIDER` | `auto` | `auto`: Anthropic when a saved app key or env key exists, otherwise mock. Explicit `mock` disables Anthropic; `anthropic` uses it when configured, otherwise falls back to mock. App keys take precedence. |
 | `ANTHROPIC_API_KEY` | empty | Anthropic API key |
 | `ANTHROPIC_MODEL` | `claude-sonnet-4-5` | Anthropic model name |
 | `FMCSA_PROVIDER` | `mock` | `mock` or live QCMobile `live` |
