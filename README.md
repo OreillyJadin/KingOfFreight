@@ -127,7 +127,8 @@ Optional live provider settings and their credentials:
 | Integration | Settings |
 |---|---|
 | Twilio SMS | `SMS_PROVIDER=auto` (default) or `twilio`; save Account SID, Auth Token and From number in Settings, or set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` |
-| Microsoft Graph email | `EMAIL_PROVIDER=graph`, `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `GRAPH_MAILBOX` |
+| Outlook delegated email | `EMAIL_PROVIDER=auto` (default); save Azure app client ID/secret in Settings → Outlook email, then Connect Outlook. Env fallback: `OUTLOOK_CLIENT_ID`, `OUTLOOK_CLIENT_SECRET`. |
+| Microsoft Graph app-only email | `EMAIL_PROVIDER=graph`, `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `GRAPH_MAILBOX` (env only; requires application permissions/admin consent) |
 | Anthropic LLM | `LLM_PROVIDER=auto` (default) or `anthropic`; save a key in Settings or set `ANTHROPIC_API_KEY` (optional `ANTHROPIC_MODEL`) |
 | FMCSA carrier verification | `FMCSA_PROVIDER=live`, `FMCSA_WEBKEY` |
 
@@ -199,7 +200,9 @@ All settings can be supplied in `.env` or as environment variables:
 | `TWILIO_ACCOUNT_SID` | empty | Twilio account SID |
 | `TWILIO_AUTH_TOKEN` | empty | Twilio token and webhook signature validation |
 | `TWILIO_FROM_NUMBER` | empty | Twilio sender number |
-| `EMAIL_PROVIDER` | `mock` | `mock` or Microsoft Graph `graph` |
+| `EMAIL_PROVIDER` | `auto` | Connected delegated Outlook first, then complete env app-only Graph, otherwise mock. Explicit `mock`, `outlook`, or `graph` override automatic selection. |
+| `OUTLOOK_CLIENT_ID` | empty | Delegated Azure application ID; app-saved credentials take precedence |
+| `OUTLOOK_CLIENT_SECRET` | empty | Delegated client secret; app-saved credentials take precedence |
 | `GRAPH_TENANT_ID` | empty | Entra tenant ID |
 | `GRAPH_CLIENT_ID` | empty | Graph client application ID |
 | `GRAPH_CLIENT_SECRET` | empty | Graph client secret |
@@ -220,8 +223,30 @@ communications are logged in the application database in both mock and live
 modes.
 
 Live SMS uses the Twilio SDK and validates signed inbound webhooks. Live email
-uses Microsoft Graph client credentials to send and poll the broker inbox for
-PDF BOLs and load-related replies. Live LLM mode submits PDF document blocks to
+uses delegated Microsoft OAuth (`common` authority) or env-only Graph client
+credentials to send and poll the broker inbox. Settings shows the exact Web
+redirect URI (production: `https://kingoffreight.onrender.com/api/email/oauth/callback`).
+Register a multi-tenant Azure application supporting organizational accounts, add
+delegated `User.Read`, `Mail.Read`, `Mail.Send` permissions, and use Connect Outlook.
+OAuth also requests `offline_access`. Company policies may require admin consent;
+this flow cannot bypass IT approval. Secrets and refresh tokens are encrypted with
+`SECRET_KEY`. Disconnect deletes the token; Microsoft permissions can also be
+revoked from the account's application permissions. The mailbox is workspace-wide.
+
+Inbox polling initially looks back 24 hours, then uses a durable per-mailbox
+watermark with a one-minute overlap and external-ID deduplication. It advances only
+after ingestion succeeds. Microsoft message sender, subject, body, received time,
+and PDF attachments are fetched into memory. Only recognized BOL PDFs or messages
+whose subject/body match an existing operational reference or non-deleted KOF
+order/PO are persisted. Other PDFs and MC-only/unrelated emails are discarded.
+Saved records include sender, subject/body, external ID, matching load/order IDs,
+tag, ingestion timestamp, and (for accepted PDFs) the first valid PDF's filename,
+bytes, size, and extracted fields. Received time is not currently persisted.
+No summaries or draft emails are generated. Ambiguous identifiers are retained
+without claiming a unique order match. Reconnect status appears in Settings if
+Microsoft revokes or expires the refresh token.
+
+Live LLM mode submits PDF document blocks to
 Anthropic using the checked-in prompts and forced tool calls. Live FMCSA calls
 QCMobile docket, carrier, and authority endpoints. Its response field mapping
 is defensive and best-effort; the FMCSA response shapes and field names have

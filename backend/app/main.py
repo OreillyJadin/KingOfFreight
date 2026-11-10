@@ -15,12 +15,13 @@ from starlette.types import Scope
 from app.auth import COOKIE_NAME, decode_session, ensure_bootstrap_user, session_user
 from app.config import get_settings
 from app.db import SessionLocal
-from app.integrations.email import get_email_provider
+from app.integrations.email import GraphEmailProvider, get_email_provider
 from app.integrations.llm import get_llm_provider
 from app.routers.api import _ingest_email_message, dev_public, protected, public
 from app.routers.auth import router as auth_router
 from app.routers.assistant import router as assistant_router
 from app.routers.twilio import router as twilio_router
+from app.routers.outlook import router as outlook_router
 from app.routers.kof import router as kof_router
 from app.routers.kof_messages import router as kof_messages_router
 from app.services.checkins import run_checkin_tick
@@ -55,6 +56,8 @@ def _poll_inbox() -> None:
     with SessionLocal() as db:
         for message in provider.fetch_new_messages():
             _ingest_email_message(db, message, get_llm_provider())
+        if isinstance(provider, GraphEmailProvider):
+            provider.commit_poll()
 
 
 @asynccontextmanager
@@ -78,7 +81,7 @@ async def lifespan(_: FastAPI):
             seconds=settings.scheduler_interval_seconds,
             id="checkin-tick",
         )
-        if settings.email_provider == "graph":
+        if settings.email_provider in {"auto", "graph", "outlook"}:
             scheduler.add_job(
                 _poll_inbox,
                 "interval",
@@ -110,6 +113,7 @@ async def password_setup_gate(request: Request, call_next: RequestResponseEndpoi
         "/api/auth/me",
         "/api/auth/set-password",
         "/api/auth/logout",
+        "/api/email/oauth/callback",
     }
     if request.url.path.startswith("/api/") and request.url.path not in allowed_paths:
         token = request.cookies.get(COOKIE_NAME)
@@ -134,6 +138,7 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(assistant_router)
 app.include_router(twilio_router)
+app.include_router(outlook_router)
 app.include_router(protected)
 app.include_router(public)
 app.include_router(kof_router)

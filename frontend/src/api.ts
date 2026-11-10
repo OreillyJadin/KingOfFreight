@@ -31,6 +31,11 @@ export type TwilioConnection = {
 };
 export type TwilioInput = { account_sid: string; auth_token: string; from_number: string };
 export type AssistantMessage = { role: "user" | "assistant"; content: string };
+export type OutlookConnection = {
+  configured: boolean; source: "app" | "env" | null; client_id: string | null;
+  redirect_uri: string; status: "not_set_up" | "ready" | "connected" | "needs_reconnect";
+  account: { email: string; name: string } | null;
+};
 export type AssistantReply = {
   reply: string;
   loads: { source: "kof" | "operational"; id: number; label: string }[];
@@ -96,6 +101,10 @@ export const api = {
   integrationsStatus: () => request<{ llm: "anthropic" | "mock"; sms: "twilio" | "mock"; twilio_configured: boolean }>("/integrations/status"),
   kofMessages: (orderNo: number) => request<KofMessage[]>(`/kof/loads/${orderNo}/messages`),
   sendKofText: (orderNo: number, recipient: KofTextAction["recipient"], body: string) => request<KofMessage>(`/kof/loads/${orderNo}/messages`, json("POST", { recipient, body })),
+  outlookConnection: () => request<OutlookConnection>("/email/connection"),
+  saveOutlookConnection: (body: { client_id: string; client_secret: string }) => request<OutlookConnection>("/email/connection", json("PUT", body)),
+  removeOutlookConnection: () => request<void>("/email/connection", json("DELETE")),
+  disconnectOutlook: () => request<void>("/email/account", json("DELETE")),
   twilioConnection: () => request<TwilioConnection>("/integrations/twilio/connection"),
   saveTwilioConnection: (body: TwilioInput) => request<TwilioConnection>("/integrations/twilio/connection", json("PUT", body)),
   removeTwilioConnection: () => request<void>("/integrations/twilio/connection", json("DELETE")),

@@ -41,6 +41,8 @@ def test_status_reports_llm_selection(
         "llm": expected,
         "sms": "mock",
         "twilio_configured": False,
+        "email": "mock",
+        "email_account": None,
     }
     assert "secret" not in response.text
 
@@ -69,6 +71,8 @@ def test_status_reports_sms_without_contacting_twilio(
         "llm": "mock",
         "sms": provider,
         "twilio_configured": configured,
+        "email": "mock",
+        "email_account": None,
     }
     assert "secret" not in response.text
     assert "+15555555555" not in response.text
