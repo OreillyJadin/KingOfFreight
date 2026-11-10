@@ -84,7 +84,10 @@ add the provider credentials under the web service's Environment settings:
 `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `GRAPH_MAILBOX`,
 `ANTHROPIC_API_KEY`, and `FMCSA_WEBKEY`, along with the corresponding provider
 selectors (`SMS_PROVIDER`, `EMAIL_PROVIDER`, `LLM_PROVIDER`, and
-`FMCSA_PROVIDER`). SMS, email and FMCSA default to mock. LLM selection defaults
+`FMCSA_PROVIDER`). Email and FMCSA default to mock. SMS defaults to `auto`:
+complete Twilio settings saved in the app (preferred) or env enable real texting;
+otherwise SMS is mocked. Set `SMS_PROVIDER=mock` to explicitly disable live SMS.
+LLM selection defaults
 to `auto`: a key saved in Settings (preferred) or `ANTHROPIC_API_KEY` enables
 Anthropic for BOL extraction and driver-reply parsing; no key uses the mock.
 Set `LLM_PROVIDER=mock` to explicitly disable Anthropic for those features.
@@ -123,13 +126,29 @@ Optional live provider settings and their credentials:
 
 | Integration | Settings |
 |---|---|
-| Twilio SMS | `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` |
+| Twilio SMS | `SMS_PROVIDER=auto` (default) or `twilio`; save Account SID, Auth Token and From number in Settings, or set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM_NUMBER` |
 | Microsoft Graph email | `EMAIL_PROVIDER=graph`, `GRAPH_TENANT_ID`, `GRAPH_CLIENT_ID`, `GRAPH_CLIENT_SECRET`, `GRAPH_MAILBOX` |
 | Anthropic LLM | `LLM_PROVIDER=auto` (default) or `anthropic`; save a key in Settings or set `ANTHROPIC_API_KEY` (optional `ANTHROPIC_MODEL`) |
 | FMCSA carrier verification | `FMCSA_PROVIDER=live`, `FMCSA_WEBKEY` |
 
 For Twilio, set the inbound SMS webhook to
 `https://<render-url>/api/webhooks/twilio/sms`.
+
+Settings → Texting (Twilio) shows the webhook URL with a copy button. Paste it
+under Phone Number → Messaging → "A message comes in" and select HTTP POST.
+The Auth Token is encrypted with `SECRET_KEY`; saved settings override the env
+credentials as a complete set. Removing them falls back to env credentials.
+The test button sends one real SMS with resolved credentials even in mock mode.
+Twilio accepting a message does not guarantee delivery (trial accounts and
+messaging-registration requirements may apply).
+
+Authenticated API: `GET/PUT/DELETE /api/integrations/twilio/connection` and
+`POST /api/integrations/twilio/test` with `{ "to": "+15551234567" }`.
+Connection responses expose masked SID/from number, configuration/source and SMS
+mode, never the token. `PUT` requires all three fields: `account_sid`,
+`auth_token`, `from_number` (E.164). Signature validation uses an explicitly set
+`PUBLIC_BASE_URL`; otherwise it reconstructs the public URL using forwarded
+protocol/host headers. Configure the proxy to supply accurate forwarded headers.
 
 To move between database hosts, dump and restore the database:
 
@@ -176,7 +195,7 @@ All settings can be supplied in `.env` or as environment variables:
 | `KOF_SYNC_INTERVAL_MINUTES` | `15` | Incremental sync interval when credentials and scheduler are enabled |
 | `KOF_FULL_SYNC_HOUR_UTC` | `8` | UTC hour for the daily full sync |
 | `ENV` | `development` | Dev simulation endpoints mount only in development |
-| `SMS_PROVIDER` | `mock` | `mock` or `twilio` |
+| `SMS_PROVIDER` | `auto` | `auto`: Twilio with complete app/env credentials, otherwise mock. Explicit `mock` disables live scheduled SMS; explicit `twilio` selects Twilio. |
 | `TWILIO_ACCOUNT_SID` | empty | Twilio account SID |
 | `TWILIO_AUTH_TOKEN` | empty | Twilio token and webhook signature validation |
 | `TWILIO_FROM_NUMBER` | empty | Twilio sender number |
@@ -193,7 +212,7 @@ All settings can be supplied in `.env` or as environment variables:
 
 ## Integration modes
 
-Defaults are safe for local development: SMS is mocked (no network), email is
+Without credentials, defaults are safe for local development: SMS is mocked (no network), email is
 mocked (send is recorded in the app; inbox fetch returns no mail), LLM extraction
 and reply parsing use local PDF/text heuristics, and FMCSA returns deterministic
 fixtures for MC `123456`, `222222`, `333333`, and `444444`. Outbound provider

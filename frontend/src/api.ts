@@ -22,6 +22,14 @@ export class ApiError extends Error {
 }
 
 export type AssistantConnection = { configured: boolean; source: "env" | "app" | null };
+export type TwilioConnection = {
+  configured: boolean;
+  source: "env" | "app" | null;
+  account_sid: string | null;
+  from_number: string | null;
+  sms: "twilio" | "mock";
+};
+export type TwilioInput = { account_sid: string; auth_token: string; from_number: string };
 export type AssistantMessage = { role: "user" | "assistant"; content: string };
 export type AssistantReply = {
   reply: string;
@@ -75,6 +83,10 @@ const json = (method: string, body?: unknown): RequestInit => ({
 });
 
 export const api = {
+  twilioConnection: () => request<TwilioConnection>("/integrations/twilio/connection"),
+  saveTwilioConnection: (body: TwilioInput) => request<TwilioConnection>("/integrations/twilio/connection", json("PUT", body)),
+  removeTwilioConnection: () => request<void>("/integrations/twilio/connection", json("DELETE")),
+  testTwilio: (to: string) => request<{ sent: boolean }>("/integrations/twilio/test", json("POST", { to })),
   assistantConnection: () => request<AssistantConnection>("/assistant/connection"),
   saveAssistantKey: (api_key: string) => request<AssistantConnection>("/assistant/connection", json("PUT", { api_key })),
   removeAssistantKey: () => request<void>("/assistant/connection", json("DELETE")),

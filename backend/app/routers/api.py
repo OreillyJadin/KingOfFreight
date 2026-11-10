@@ -11,12 +11,11 @@ from sqlalchemy.orm import Session, joinedload
 from twilio.request_validator import RequestValidator
 
 from app.auth import require_broker
-from app.config import get_settings
 from app.db import get_db
 from app.integrations.email import EmailProvider, get_email_provider
 from app.integrations.fmcsa import FmcsaProvider, get_fmcsa_provider
 from app.integrations.llm import LlmProvider, get_llm_provider, resolve_llm_mode
-from app.integrations.sms import SmsProvider, get_sms_provider
+from app.integrations.sms import SmsProvider, get_sms_provider, resolve_sms_mode
 from app.models import (
     BolFile,
     BrokerSettings,
@@ -28,6 +27,7 @@ from app.models import (
     StatusUpdate,
     utcnow,
 )
+from app.routers.twilio import webhook_url
 from app.schemas import (
     ApproveStatus,
     BookLoad,
@@ -66,6 +66,7 @@ from app.services.stop_timezones import (
     timezone_for_state,
 )
 from app.services.templates import city_state, render_checkin, render_tracking_link
+from app.services.twilio_credentials import get_twilio_credentials
 
 protected = APIRouter(prefix="/api", dependencies=[Depends(require_broker)])
 public = APIRouter(prefix="/api")
@@ -90,18 +91,11 @@ def _get_load(db: Session, load_id: int) -> Load:
 
 @protected.get("/integrations/status")
 def integrations_status(db: Session = Depends(get_db)) -> dict:
-    settings = get_settings()
+    credentials = get_twilio_credentials(db)
     return {
         "llm": resolve_llm_mode(bool(get_assistant_key(db))),
-        "sms": "twilio" if settings.sms_provider == "twilio" else "mock",
-        "twilio_configured": all(
-            value and value.strip()
-            for value in (
-                settings.twilio_account_sid,
-                settings.twilio_auth_token,
-                settings.twilio_from_number,
-            )
-        ),
+        "sms": resolve_sms_mode(bool(credentials)),
+        "twilio_configured": bool(credentials),
     }
 
 
@@ -920,12 +914,13 @@ async def twilio_sms(
     sender = str(form.get("From", ""))
     body = str(form.get("Body", ""))
     sid = str(form.get("MessageSid", "")) or None
-    settings = get_settings()
-    if settings.sms_provider == "twilio":
+    credentials = get_twilio_credentials(db)
+    if resolve_sms_mode(bool(credentials)) == "twilio":
         signature = request.headers.get("X-Twilio-Signature", "")
-        url = f"{settings.public_base_url.rstrip('/')}{request.url.path}"
-        validator = RequestValidator(settings.twilio_auth_token or "")
-        if not validator.validate(url, dict(form), signature):
+        if credentials is None:
+            raise HTTPException(status_code=403, detail="Invalid Twilio signature")
+        validator = RequestValidator(credentials.auth_token)
+        if not validator.validate(webhook_url(request), dict(form), signature):
             raise HTTPException(status_code=403, detail="Invalid Twilio signature")
     handle_driver_reply(db, sender, body, "sms", sid, llm)
     return Response(content="<Response/>", media_type="application/xml")
