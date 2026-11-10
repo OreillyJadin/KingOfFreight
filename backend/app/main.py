@@ -19,6 +19,7 @@ from app.integrations.email import get_email_provider
 from app.integrations.llm import get_llm_provider
 from app.routers.api import _ingest_email_message, dev_public, protected, public
 from app.routers.auth import router as auth_router
+from app.routers.assistant import router as assistant_router
 from app.routers.kof import router as kof_router
 from app.services.checkins import run_checkin_tick
 
@@ -129,6 +130,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 app.include_router(auth_router)
+app.include_router(assistant_router)
 app.include_router(protected)
 app.include_router(public)
 app.include_router(kof_router)

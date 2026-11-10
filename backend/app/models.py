@@ -323,6 +323,16 @@ class User(Base):
     )
 
 
+class AssistantConnection(Base):
+    __tablename__ = "assistant_connection"
+    __table_args__ = (
+        CheckConstraint("id = 1", name="ck_assistant_connection_singleton"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key_encrypted: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class KofConnection(Base):
     __tablename__ = "kof_connection"
     __table_args__ = (CheckConstraint("id = 1", name="ck_kof_connection_singleton"),)

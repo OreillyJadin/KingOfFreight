@@ -9,6 +9,7 @@ export default function Modal({
   children,
   footer,
   size = "max-w-2xl",
+  layout = "dialog",
 }: {
   title: string;
   eyebrow?: string;
@@ -16,6 +17,7 @@ export default function Modal({
   children: ReactNode;
   footer?: ReactNode;
   size?: string;
+  layout?: "dialog" | "side";
 }) {
   const titleId = useId();
   const dialogRef = useRef<HTMLElement>(null);
@@ -73,7 +75,7 @@ export default function Modal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-end justify-center bg-scrim/60 p-0 backdrop-blur-[2px] sm:items-center sm:p-5"
+      className={`fixed inset-0 z-50 flex bg-scrim/60 backdrop-blur-[2px] ${layout === "side" ? "items-stretch justify-end" : "items-end justify-center p-0 sm:items-center sm:p-5"}`}
       role="presentation"
       onKeyDown={handleKeyDown}
       onMouseDown={(event) => {
@@ -86,9 +88,9 @@ export default function Modal({
         role="dialog"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className={`max-h-[92dvh] w-full overflow-y-auto rounded-t-2xl border border-line bg-surface pb-[env(safe-area-inset-bottom)] shadow-2xl motion-safe:animate-[fw-in_160ms_ease-out] sm:rounded-2xl ${size}`}
+        className={`w-full border border-line bg-surface pb-[env(safe-area-inset-bottom)] shadow-2xl motion-safe:animate-[fw-in_160ms_ease-out] ${layout === "side" ? "flex h-dvh flex-col overflow-hidden md:max-w-lg" : `max-h-[92dvh] overflow-y-auto rounded-t-2xl sm:rounded-2xl ${size}`}`}
       >
-        <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-line-strong sm:hidden" />
+        {layout === "dialog" && <div className="mx-auto mt-2 h-1 w-10 rounded-full bg-line-strong sm:hidden" />}
         <header className="sticky top-0 z-10 flex items-start justify-between border-b border-line/60 bg-surface px-5 py-4 sm:px-6">
           <div>
             {eyebrow && (
@@ -107,7 +109,7 @@ export default function Modal({
             aria-label="Close dialog"
           />
         </header>
-        <div className="px-5 py-5 sm:px-6">{children}</div>
+        <div className={layout === "side" ? "flex min-h-0 flex-1 flex-col" : "px-5 py-5 sm:px-6"}>{children}</div>
         {footer && (
           <div className="sticky bottom-0 flex justify-end gap-2 border-t border-line bg-surface px-5 py-3 sm:px-6">
             {footer}

@@ -15,6 +15,19 @@ import type {
 
 type RequestOptions = RequestInit & { redirectOn401?: boolean };
 
+export class ApiError extends Error {
+  constructor(message: string, public status: number) {
+    super(message);
+  }
+}
+
+export type AssistantConnection = { configured: boolean; source: "env" | "app" | null };
+export type AssistantMessage = { role: "user" | "assistant"; content: string };
+export type AssistantReply = {
+  reply: string;
+  loads: { source: "kof" | "operational"; id: number; label: string }[];
+};
+
 export async function request<T>(
   path: string,
   options: RequestOptions = {},
@@ -46,7 +59,7 @@ export async function request<T>(
     } catch {
       message = body || message;
     }
-    throw new Error(message);
+    throw new ApiError(message, response.status);
   }
   if (response.status === 204) return undefined as T;
   const contentType = response.headers.get("content-type") ?? "";
@@ -62,6 +75,10 @@ const json = (method: string, body?: unknown): RequestInit => ({
 });
 
 export const api = {
+  assistantConnection: () => request<AssistantConnection>("/assistant/connection"),
+  saveAssistantKey: (api_key: string) => request<AssistantConnection>("/assistant/connection", json("PUT", { api_key })),
+  removeAssistantKey: () => request<void>("/assistant/connection", json("DELETE")),
+  assistantChat: (messages: AssistantMessage[]) => request<AssistantReply>("/assistant/chat", json("POST", { messages })),
   login: ({ username, password }: { username?: string; password: string }) =>
     request<{ authenticated: boolean; username: string | null; must_set_password: boolean }>(
       "/auth/login",
