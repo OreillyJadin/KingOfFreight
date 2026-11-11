@@ -257,7 +257,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     alertsTrigger.current = trigger;
     setAlertsOpen(true);
   }
-  const forcedOperator = auth.data?.team_members_exist && !auth.data.operator && !isAdmin;
+  const forcedOperator = auth.data?.team_members_exist && !auth.data.operator && !isAdmin && !auth.data.can_claim_admin;
   if (forcedOperator || operatorOpen) return <OperatorChooser onSelected={() => setOperatorOpen(false)} onCancel={!forcedOperator ? () => setOperatorOpen(false) : undefined} allowClear={isAdmin} onLogout={() => void logout()} />;
   return (
     <div className="min-h-screen bg-bg pb-24 text-fg md:pb-0">
