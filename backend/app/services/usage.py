@@ -4,9 +4,11 @@ from urllib.parse import urlsplit
 
 from fastapi import Request
 from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from app.db import SessionLocal
-from app.models import UsageEvent, utcnow
+from app.models import UsageEvent, UsageMinute, utcnow
 
 logger = logging.getLogger(__name__)
 PAGES = {
@@ -122,12 +124,57 @@ def record_event(
         return False
 
 
+def record_heartbeat(identity: tuple, path: str, user_agent: str) -> bool:
+    try:
+        user_id, username = identity[:2]
+        team_member_id, operator_name = (
+            identity[2:] if len(identity) == 4 else (None, None)
+        )
+        values = dict(
+            identity=operator_name or username or "shared login",
+            minute=utcnow().replace(second=0, microsecond=0),
+            path=path,
+            user_id=user_id,
+            username=username,
+            team_member_id=team_member_id,
+            operator_name=operator_name,
+            device=device_type(user_agent),
+        )
+        with SessionLocal() as db:
+            insert = (
+                pg_insert
+                if db.get_bind().dialect.name == "postgresql"
+                else sqlite_insert
+            )
+            statement = insert(UsageMinute).values(**values)
+            db.execute(
+                statement.on_conflict_do_update(
+                    index_elements=["identity", "minute"],
+                    set_={
+                        key: value
+                        for key, value in values.items()
+                        if key not in {"identity", "minute"}
+                    },
+                )
+            )
+            db.commit()
+        return True
+    except Exception:
+        logger.warning("Usage heartbeat recording failed")
+        return False
+
+
 def prune_usage_events() -> None:
     try:
         with SessionLocal() as db:
             db.execute(
                 delete(UsageEvent).where(
                     UsageEvent.created_at < utcnow() - timedelta(days=180)
+                )
+            )
+            db.execute(
+                delete(UsageMinute).where(
+                    UsageMinute.minute < utcnow() - timedelta(days=180)
                 )
             )
             db.commit()

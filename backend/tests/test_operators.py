@@ -178,7 +178,7 @@ def test_operator_attribution_report_and_snapshots(client, db, admin_login):
     client.patch(
         f"/api/team-members/{tony['id']}", json={"name": "Renamed", "is_active": False}
     )
-    data = client.get("/api/admin/usage").json()
+    data = client.get("/api/admin/usage?exclude_admins=false").json()
     people = {user["label"]: user for user in data["users"]}
     assert people["Tony"]["questions"] == people["Kolby"]["questions"] == 1
     assert people["Tony"]["page_views"] == people["Kolby"]["page_views"] == 1
@@ -194,7 +194,7 @@ def test_operator_attribution_report_and_snapshots(client, db, admin_login):
         ).json()["accepted"]
         is True
     )
-    data = client.get("/api/admin/usage").json()
+    data = client.get("/api/admin/usage?exclude_admins=false").json()
     assert any(user["label"] == admin_login.username for user in data["users"])
 
 

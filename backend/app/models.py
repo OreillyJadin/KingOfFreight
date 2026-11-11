@@ -370,6 +370,30 @@ class UsageEvent(Base):
     )
 
 
+class UsageMinute(Base):
+    __tablename__ = "usage_minutes"
+    __table_args__ = (
+        UniqueConstraint("identity", "minute", name="uq_usage_minutes_identity_minute"),
+        CheckConstraint(
+            "device IN ('mobile', 'desktop', 'tablet')", name="ck_usage_minutes_device"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    identity: Mapped[str] = mapped_column(String(120))
+    minute: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    path: Mapped[str] = mapped_column(String(160))
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    username: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    team_member_id: Mapped[int | None] = mapped_column(
+        ForeignKey("team_members.id", ondelete="SET NULL"), nullable=True
+    )
+    operator_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    device: Mapped[str] = mapped_column(String(10))
+
+
 class CustomerContact(Base):
     __tablename__ = "customer_contacts"
     customer_key: Mapped[str] = mapped_column(String(300), primary_key=True)

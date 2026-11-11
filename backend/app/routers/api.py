@@ -271,7 +271,9 @@ def get_load(load_id: int, db: Session = Depends(get_db)) -> dict:
 
 
 @protected.post("/loads", response_model=LoadOut, status_code=201)
-def create_load(payload: LoadCreate, db: Session = Depends(get_db)) -> Load:
+def create_load(
+    payload: LoadCreate, request: Request, db: Session = Depends(get_db)
+) -> Load:
     values = payload.model_dump()
     broker_timezone = get_prefs(db).broker_timezone
     for field in ("driver_phone", "dispatcher_phone"):
@@ -290,12 +292,18 @@ def create_load(payload: LoadCreate, db: Session = Depends(get_db)) -> Load:
     db.add(load)
     db.commit()
     db.refresh(load)
+    feature_event(
+        request, "load_created", {"load_id": load.id, "reference": load.reference}
+    )
     return load
 
 
 @protected.patch("/loads/{load_id}", response_model=LoadOut)
-def patch_load(load_id: int, payload: LoadPatch, db: Session = Depends(get_db)) -> Load:
+def patch_load(
+    load_id: int, payload: LoadPatch, request: Request, db: Session = Depends(get_db)
+) -> Load:
     load = _get_load(db, load_id)
+    old_status = load.status
     broker_timezone = get_prefs(db).broker_timezone
     values = payload.model_dump(exclude_unset=True)
     for stop in ("pickup", "delivery"):
@@ -316,20 +324,39 @@ def patch_load(load_id: int, payload: LoadPatch, db: Session = Depends(get_db)) 
     load.updated_at = utcnow()
     db.commit()
     db.refresh(load)
+    feature_event(
+        request, "load_edited", {"load_id": load.id, "reference": load.reference}
+    )
+    if old_status != load.status:
+        feature_event(
+            request,
+            "load_status_changed",
+            {"load_id": load.id, "reference": load.reference, "status": load.status},
+        )
     return load
 
 
 @protected.post("/loads/{load_id}/post", response_model=LoadOut)
-def post_load(load_id: int, db: Session = Depends(get_db)) -> Load:
+def post_load(load_id: int, request: Request, db: Session = Depends(get_db)) -> Load:
     load = _get_load(db, load_id)
     load.status = "posted"
     db.commit()
     db.refresh(load)
+    feature_event(
+        request, "truckstop_post", {"load_id": load.id, "reference": load.reference}
+    )
+    feature_event(
+        request,
+        "load_status_changed",
+        {"load_id": load.id, "reference": load.reference, "status": load.status},
+    )
     return load
 
 
 @protected.get("/loads/{load_id}/post-text", response_class=Response)
-def post_text(load_id: int, db: Session = Depends(get_db)) -> Response:
+def post_text(
+    load_id: int, request: Request, db: Session = Depends(get_db)
+) -> Response:
     load = _get_load(db, load_id)
     lines = [
         f"Lane: {city_state(load.pickup_city, load.pickup_state)} to {city_state(load.delivery_city, load.delivery_state)}",
@@ -340,6 +367,11 @@ def post_text(load_id: int, db: Session = Depends(get_db)) -> Response:
         f"Commodity: {load.commodity or 'TBD'}",
         f"Special requirements: {load.special_requirements or 'None'}",
     ]
+    feature_event(
+        request,
+        "truckstop_post_text",
+        {"load_id": load.id, "reference": load.reference},
+    )
     return Response(content="\n".join(lines), media_type="text/plain")
 
 
@@ -347,6 +379,7 @@ def post_text(load_id: int, db: Session = Depends(get_db)) -> Response:
 def book_load(
     load_id: int,
     payload: BookLoad,
+    request: Request,
     db: Session = Depends(get_db),
 ) -> Load:
     load = _get_load(db, load_id)
@@ -436,12 +469,20 @@ def book_load(
     draft_status_update(db, load, "booked", "manual", None, None, applied=True)
     db.commit()
     db.refresh(load)
+    feature_event(
+        request, "load_booked", {"load_id": load.id, "reference": load.reference}
+    )
+    feature_event(
+        request,
+        "load_status_changed",
+        {"load_id": load.id, "reference": load.reference, "status": load.status},
+    )
     return load
 
 
 @protected.post("/loads/{load_id}/status", response_model=StatusUpdateOut)
 def manual_status(
-    load_id: int, payload: ManualStatus, db: Session = Depends(get_db)
+    load_id: int, payload: ManualStatus, request: Request, db: Session = Depends(get_db)
 ) -> StatusUpdate:
     load = _get_load(db, load_id)
     broker_timezone = get_prefs(db).broker_timezone
@@ -457,6 +498,11 @@ def manual_status(
     )
     db.commit()
     db.refresh(update)
+    feature_event(
+        request,
+        "load_status_changed",
+        {"load_id": load.id, "reference": load.reference, "status": load.status},
+    )
     return update
 
 
@@ -517,14 +563,22 @@ def approve_status(
     db.commit()
     db.refresh(update)
     feature_event(
-        request, "operational_send", {"channel": channel, "action": "customer_update"}
+        request,
+        "operational_send",
+        {
+            "channel": channel,
+            "action": "customer_update",
+            "load_id": load.id,
+            "reference": load.reference,
+            "update_id": update.id,
+        },
     )
     return update
 
 
 @protected.post("/status-updates/{update_id}/skip", response_model=StatusUpdateOut)
 def skip_status(
-    update_id: int, payload: SkipStatus, db: Session = Depends(get_db)
+    update_id: int, payload: SkipStatus, request: Request, db: Session = Depends(get_db)
 ) -> StatusUpdate:
     update = db.get(StatusUpdate, update_id)
     if update is None:
@@ -535,12 +589,24 @@ def skip_status(
     update.state = "skipped"
     db.commit()
     db.refresh(update)
+    feature_event(
+        request,
+        "operational_update_dismiss",
+        {"load_id": update.load_id, "update_id": update.id},
+    )
+    if payload.apply:
+        feature_event(
+            request,
+            "load_status_changed",
+            {"load_id": update.load_id, "status": update.status},
+        )
     return update
 
 
 @protected.post("/carriers/verify", response_model=CarrierOut)
 def verify_carrier(
     payload: VerifyCarrier,
+    request: Request,
     db: Session = Depends(get_db),
     provider: FmcsaProvider = Depends(get_fmcsa_provider),
 ) -> Carrier:
@@ -573,6 +639,7 @@ def verify_carrier(
     carrier.verified_at = utcnow()
     db.commit()
     db.refresh(carrier)
+    feature_event(request, "carrier_verify", {"carrier_id": carrier.id})
     return carrier
 
 
@@ -623,7 +690,21 @@ def send_checkin_now(
     feature_event(
         request,
         "operational_send",
-        {"channel": checkin.checkin_channel, "action": "checkin"},
+        {
+            "channel": checkin.checkin_channel,
+            "action": "checkin",
+            "load_id": checkin.load_id,
+            "checkin_id": checkin.id,
+        },
+    )
+    feature_event(
+        request,
+        "checkin_manual_send",
+        {
+            "load_id": checkin.load_id,
+            "checkin_id": checkin.id,
+            "channel": checkin.checkin_channel,
+        },
     )
     return _orm_values(checkin)
 
@@ -747,7 +828,7 @@ async def upload_bol(
     db.add(communication)
     db.commit()
     db.refresh(communication)
-    feature_event(request, "bol_upload_extract")
+    feature_event(request, "bol_upload_extract", {"communication_id": communication.id})
     return communication
 
 
@@ -758,6 +839,7 @@ async def upload_bol(
 )
 def create_load_from_inbox(
     communication_id: int,
+    request: Request,
     payload: CreateLoadOverrides | None = None,
     db: Session = Depends(get_db),
 ) -> Load:
@@ -827,6 +909,15 @@ def create_load_from_inbox(
     communication.archived = True
     db.commit()
     db.refresh(load)
+    feature_event(
+        request,
+        "load_created",
+        {
+            "load_id": load.id,
+            "reference": load.reference,
+            "communication_id": communication.id,
+        },
+    )
     return load
 
 
@@ -879,7 +970,14 @@ def send_tracking_link(
     db.commit()
     db.refresh(communication)
     feature_event(
-        request, "operational_send", {"channel": channel, "action": "tracking_link"}
+        request,
+        "operational_send",
+        {
+            "channel": channel,
+            "action": "tracking_link",
+            "load_id": load.id,
+            "reference": load.reference,
+        },
     )
     return communication
 

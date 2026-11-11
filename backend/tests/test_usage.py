@@ -210,7 +210,7 @@ def test_aggregation_timezone_boundaries_and_shared_bucket(
     event(member, "page_view", start - timedelta(seconds=1), "/inbox")
     event(member, "page_view", now + timedelta(seconds=1), "/inbox")
     db.commit()
-    data = client.get("/api/admin/usage?days=7").json()
+    data = client.get("/api/admin/usage?days=7&exclude_admins=false").json()
     assert data["timezone"] == "America/Chicago"
     assert data["totals"] == {
         "events": 5,
@@ -252,7 +252,7 @@ def test_recent_questions_limited_to_50(client, db, admin_login):
             )
         )
     db.commit()
-    data = client.get("/api/admin/usage").json()
+    data = client.get("/api/admin/usage?exclude_admins=false").json()
     assert data["totals"]["chat_questions"] == 60
     assert len(data["questions"]) == 50
     assert data["questions"][0]["text"] == "59"
