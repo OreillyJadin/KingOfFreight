@@ -1,4 +1,4 @@
-import { usageQuery, type UsageFilters, type UsageResponses } from "./usage-analytics";
+import { usageQuery, type UsageFilters, type UsageResponses, type UsageExtra } from "./usage-analytics";
 import type {
   Alert,
   BookPayload,
@@ -135,7 +135,7 @@ export type CustomerUpdateDraft = {
 
 export const api = {
   usageHeartbeat: (path: string) => request<{ accepted: boolean }>("/usage/heartbeat", { ...json("POST", { path }), redirectOn401: false }),
-  usageAnalytics: <K extends keyof UsageResponses>(section: K, filters: UsageFilters, extra?: { identity?: string; limit?: number; offset?: number }) => request<UsageResponses[K]>(`/admin/usage/${section}?${usageQuery(filters, extra)}`),
+  usageAnalytics: <K extends keyof UsageResponses>(section: K, filters: UsageFilters, extra?: UsageExtra) => request<UsageResponses[K]>(`/admin/usage/${section}?${usageQuery(filters, extra)}`),
   teamMembers: () => request<TeamMember[]>("/team-members"),
   addTeamMember: (name: string) => request<TeamMember>("/team-members", json("POST", { name })),
   updateTeamMember: (id: number, body: { name?: string; is_active?: boolean }) => request<TeamMember>(`/team-members/${id}`, json("PATCH", body)),
