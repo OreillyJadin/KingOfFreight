@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import Depends, HTTPException, Request, status
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
-from sqlalchemy import func, select
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -30,12 +30,15 @@ def _serializer() -> URLSafeTimedSerializer:
     return URLSafeTimedSerializer(secret, salt="broker-session")
 
 
-def create_session(uid: int | None = None, password_version: int | None = None) -> str:
+def create_session(
+    uid: int | None = None, password_version: int | None = None, role: str | None = None
+) -> str:
     return _serializer().dumps(
         {
             "broker": True,
             "uid": uid,
             "password_version": password_version,
+            "role": role,
         }
     )
 
@@ -56,7 +59,7 @@ def session_user(payload: dict[str, Any], db: Session) -> User | None:
     if not isinstance(uid, int) or not isinstance(version, int):
         return None
     user = db.get(User, uid)
-    if user is None or user.password_version != version:
+    if user is None or not user.is_active or user.password_version != version:
         return None
     return user
 
@@ -94,6 +97,26 @@ def require_broker(request: Request, db: Session = Depends(get_db)) -> User | No
 
 def password_matches(candidate: str) -> bool:
     return hmac.compare_digest(candidate, get_settings().broker_password)
+
+
+def require_admin(
+    user: User | None = Depends(require_broker), db: Session = Depends(get_db)
+) -> User:
+    lock_admin_changes(db)
+    if user is not None:
+        db.refresh(user)
+    if user is None or not user.is_active or user.role != "admin":
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user
+
+
+def admin_exists(db: Session) -> bool:
+    return db.scalar(select(User.id).where(User.role == "admin").limit(1)) is not None
+
+
+def lock_admin_changes(db: Session) -> None:
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(584739201)"))
 
 
 def ensure_bootstrap_user(db: Session, username: str | None) -> User | None:

@@ -27,13 +27,14 @@ def test_bootstrap_login_password_setup_gating_and_session_invalidation(
 
             login = client.post(
                 "/api/auth/login",
-                json={"username": "keaster", "password": ""},
+                json={"username": "keaster", "password": "test-password"},
             )
             assert login.status_code == 200
             assert login.json() == {
                 "authenticated": True,
                 "username": "Keaster",
                 "must_set_password": True,
+                "role": "member",
             }
             old_cookie = client.cookies.get(COOKIE_NAME)
             assert old_cookie
@@ -49,6 +50,8 @@ def test_bootstrap_login_password_setup_gating_and_session_invalidation(
                 "broker_timezone": settings.broker_timezone,
                 "username": "Keaster",
                 "must_set_password": True,
+                "role": "member",
+                "can_claim_admin": False,
             }
             assert client.get("/api/loads").status_code == 403
             assert client.get("/api/track/not-a-real-token").status_code == 403
@@ -129,6 +132,7 @@ def test_bootstrap_login_password_setup_gating_and_session_invalidation(
                 "authenticated": True,
                 "username": None,
                 "must_set_password": False,
+                "role": None,
             }
 
             db.add(
@@ -198,6 +202,11 @@ def test_bootstrap_login_matches_configured_username_case_insensitively(
             response = client.post(
                 "/api/auth/login",
                 json={"username": "KEASTER", "password": "anything"},
+            )
+            assert response.status_code == 401
+            response = client.post(
+                "/api/auth/login",
+                json={"username": "KEASTER", "password": "test-password"},
             )
             assert response.status_code == 200
             assert response.json()["must_set_password"] is True

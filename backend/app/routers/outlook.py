@@ -10,7 +10,7 @@ from itsdangerous import BadSignature, URLSafeTimedSerializer
 from pydantic import BaseModel, SecretStr
 from sqlalchemy.orm import Session
 
-from app.auth import COOKIE_NAME, require_broker
+from app.auth import COOKIE_NAME, require_admin, require_broker
 from app.config import get_settings
 from app.db import get_db
 from app.models import OutlookApp, OutlookConnection
@@ -84,7 +84,7 @@ def connection(request: Request, db: Session = Depends(get_db)):
     }
 
 
-@router.put("/connection")
+@router.put("/connection", dependencies=[Depends(require_admin)])
 def save(body: AppInput, request: Request, db: Session = Depends(get_db)):
     secret = body.client_secret.get_secret_value().strip()
     if not secret or len(secret) > 2000:
@@ -104,7 +104,7 @@ def save(body: AppInput, request: Request, db: Session = Depends(get_db)):
     return connection(request, db)
 
 
-@router.delete("/connection", status_code=204)
+@router.delete("/connection", status_code=204, dependencies=[Depends(require_admin)])
 def remove(db: Session = Depends(get_db)):
     for model in (OutlookApp, OutlookConnection):
         row = db.get(model, 1)

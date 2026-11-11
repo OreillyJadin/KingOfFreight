@@ -8,7 +8,7 @@ from requests.exceptions import RequestException
 from sqlalchemy.orm import Session
 from twilio.base.exceptions import TwilioException, TwilioRestException
 
-from app.auth import require_broker
+from app.auth import require_admin, require_broker
 from app.config import get_settings
 from app.db import get_db
 from app.integrations.sms import TwilioSmsProvider, resolve_sms_mode
@@ -68,7 +68,7 @@ def connection(db: Session = Depends(get_db)) -> dict:
     }
 
 
-@router.put("/connection")
+@router.put("/connection", dependencies=[Depends(require_admin)])
 def save_connection(body: ConnectionInput, db: Session = Depends(get_db)) -> dict:
     token = body.auth_token.get_secret_value().strip()
     if not token or len(token) > 500:
@@ -84,7 +84,7 @@ def save_connection(body: ConnectionInput, db: Session = Depends(get_db)) -> dic
     return connection(db)
 
 
-@router.delete("/connection", status_code=204)
+@router.delete("/connection", status_code=204, dependencies=[Depends(require_admin)])
 def delete_connection(db: Session = Depends(get_db)) -> None:
     row = db.get(TwilioConnection, 1)
     if row:
@@ -109,7 +109,7 @@ def _safe_twilio_error(
     return message[:500]
 
 
-@router.post("/test")
+@router.post("/test", dependencies=[Depends(require_admin)])
 def test_sms(body: TestInput, db: Session = Depends(get_db)) -> dict:
     credentials = get_twilio_credentials(db)
     if not credentials:

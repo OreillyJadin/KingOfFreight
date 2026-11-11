@@ -100,7 +100,7 @@ def test_status_confirmed_and_proposed(db, load_data):
     assert AssistantTools(db).get_load_status("kof", 999) == {"error": "Load not found"}
 
 
-def test_connection_encrypted_and_app_precedence(client, db, monkeypatch):
+def test_connection_encrypted_and_app_precedence(client, db, monkeypatch, admin_login):
     assert client.get("/api/assistant/connection").json() == {
         "configured": False,
         "source": None,

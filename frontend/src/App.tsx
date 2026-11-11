@@ -11,6 +11,7 @@ import Settings from "./pages/Settings";
 import Tracking from "./pages/Tracking";
 import TruckStop from "./pages/TruckStop";
 import SetPassword from "./pages/SetPassword";
+import Users from "./pages/Users";
 import Dashboard from "./pages/kof/Dashboard";
 import KofTracking from "./pages/kof/KofTracking";
 import Loads from "./pages/kof/Loads";
@@ -47,6 +48,7 @@ function ProtectedApp() {
         <Route path="/truckstop" element={<TruckStop />} />
         <Route path="/status" element={<Status />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/users" element={<Users />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </AppLayout>

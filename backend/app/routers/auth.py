@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.auth import (
     COOKIE_NAME,
+    admin_exists,
     create_session,
     hash_password,
     password_hash_matches,
@@ -13,7 +14,7 @@ from app.auth import (
 )
 from app.config import get_settings
 from app.db import get_db
-from app.models import User
+from app.models import User, utcnow
 from app.services.preferences import get_prefs
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -40,6 +41,7 @@ def _set_session_cookie(response: Response, user: User | None = None) -> None:
         create_session(
             user.id if user is not None else None,
             user.password_version if user is not None else None,
+            user.role if user is not None else None,
         ),
         httponly=True,
         secure=secure,
@@ -59,32 +61,32 @@ def login(
         user = db.scalar(
             select(User).where(func.lower(User.username) == username.lower())
         )
-        if user is None:
+        if user is None or not user.is_active:
             raise HTTPException(status_code=401, detail="Invalid username or password")
         if user.password_hash is not None:
             valid_password = password_hash_matches(payload.password, user.password_hash)
-        elif (
-            user.must_set_password
-            and (
-                bootstrap_username := (get_settings().bootstrap_username or "").strip()
-            )
-            and user.username.casefold() == bootstrap_username.casefold()
-        ):
-            valid_password = True
         else:
             valid_password = user.must_set_password and password_matches(
                 payload.password
             )
         if not valid_password:
             raise HTTPException(status_code=401, detail="Invalid username or password")
-    elif not password_matches(payload.password):
-        raise HTTPException(status_code=401, detail="Invalid password")
+    else:
+        if admin_exists(db):
+            raise HTTPException(status_code=401, detail="Sign in with your username")
+        if not password_matches(payload.password):
+            raise HTTPException(status_code=401, detail="Invalid password")
+
+    if user is not None:
+        user.last_login_at = utcnow()
+        db.commit()
 
     _set_session_cookie(response, user)
     return {
         "authenticated": True,
         "username": user.username if user is not None else None,
         "must_set_password": user.must_set_password if user is not None else False,
+        "role": user.role if user is not None else None,
     }
 
 
@@ -103,6 +105,8 @@ def me(
         "broker_timezone": get_prefs(db).broker_timezone,
         "username": user.username if user is not None else None,
         "must_set_password": user.must_set_password if user is not None else False,
+        "role": user.role if user is not None else None,
+        "can_claim_admin": user is None and not admin_exists(db),
     }
 
 

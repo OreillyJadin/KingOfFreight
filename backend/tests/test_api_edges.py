@@ -1,5 +1,3 @@
-import base64
-import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
@@ -13,7 +11,7 @@ from app.models import BolFile, Communication, Load, ScheduledCheckIn, utcnow
 def test_auth_public_routes_and_twilio_signature(client, db, load_data, monkeypatch):
     from fastapi.testclient import TestClient
 
-    from app.auth import COOKIE_NAME
+    from app.auth import COOKIE_NAME, decode_session
     from app.main import app
 
     unauthorized = TestClient(app)
@@ -58,17 +56,16 @@ def test_auth_public_routes_and_twilio_signature(client, db, load_data, monkeypa
         "broker_timezone": get_settings().broker_timezone,
         "username": None,
         "must_set_password": False,
+        "role": None,
+        "can_claim_admin": True,
     }
     session_cookie = client.cookies.get(COOKIE_NAME)
     assert session_cookie and "test-password" not in session_cookie
-    encoded_payload = session_cookie.split(".", 1)[0]
-    decoded_payload = base64.urlsafe_b64decode(
-        encoded_payload + "=" * (-len(encoded_payload) % 4)
-    )
-    assert json.loads(decoded_payload) == {
+    assert decode_session(session_cookie) == {
         "broker": True,
         "uid": None,
         "password_version": None,
+        "role": None,
     }
 
 

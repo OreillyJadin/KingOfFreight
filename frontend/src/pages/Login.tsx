@@ -70,6 +70,7 @@ export default function Login() {
             <p className="mt-2 text-sm text-muted">
               Sign in to pick up where you left off.
             </p>
+            <p className="mt-2 text-xs text-muted">Use your username and password. Before the first admin is created, you can leave the username blank to use the shared password.</p>
             <form
               className="mt-8 space-y-5"
               onSubmit={(event) => {
@@ -113,7 +114,7 @@ export default function Login() {
                   />
                 </span>
               </label>
-              <p className="-mt-2 text-xs text-muted">First time signing in? Enter your username and leave the password blank.</p>
+              <p className="-mt-2 text-xs text-muted">First time signing in? Use the temporary password you were given.</p>
               {error && (
                 <p className="rounded-lg bg-danger/10 px-3 py-2 text-sm text-danger-ink" role="alert">
                   {error}

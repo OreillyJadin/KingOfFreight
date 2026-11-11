@@ -17,7 +17,7 @@ function when(value?: string | null) {
   });
 }
 
-export function KofSyncCard() {
+export function KofSyncCard({ isAdmin = false }: { isAdmin?: boolean }) {
   const queryClient = useQueryClient();
   const { showToast } = useToast();
   const [username, setUsername] = useState("");
@@ -88,6 +88,8 @@ export function KofSyncCard() {
         <p role="alert" className="mt-4 text-sm text-danger-ink">
           {(connection.error as Error).message}
         </p>
+      ) : !connection.data?.configured && !isAdmin ? (
+        <p className="mt-4 text-sm text-muted">Ask your admin to connect King of Freight. Sync status and Sync now will appear here once connected.</p>
       ) : !connection.data?.configured ? (
         <div className="mt-4">
           <h3 className="font-semibold text-fg">Connect King of Freight</h3>
@@ -140,7 +142,7 @@ export function KofSyncCard() {
               <p className="min-w-0 truncate text-sm text-fg-2">
                 Connected as <span className="font-semibold text-fg">{connection.data.username}</span>
               </p>
-              <Button
+              {isAdmin && <Button
                 variant="secondary"
                 loading={disconnect.isPending}
                 onClick={() => {
@@ -150,7 +152,7 @@ export function KofSyncCard() {
                 }}
               >
                 Disconnect
-              </Button>
+              </Button>}
             </div>
           )}
           {connection.data?.source === "env" && (

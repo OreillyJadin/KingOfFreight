@@ -135,6 +135,26 @@ def client(db, providers):
 
 
 @pytest.fixture()
+def admin_login(client, db):
+    from app.auth import COOKIE_NAME, create_session, hash_password
+    from app.models import User
+
+    user = User(
+        username="TestAdmin",
+        password_hash=hash_password("admin-password"),
+        role="admin",
+        must_set_password=False,
+    )
+    db.add(user)
+    db.commit()
+    client.cookies.clear()
+    client.cookies.set(
+        COOKIE_NAME, create_session(user.id, user.password_version, user.role)
+    )
+    return user
+
+
+@pytest.fixture()
 def load_data(db):
     from datetime import timedelta
 

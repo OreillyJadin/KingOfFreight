@@ -19,7 +19,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Session
 
-from app.auth import require_broker
+from app.auth import require_admin, require_broker
 from app.config import get_settings
 from app.db import get_db
 from app.integrations.kof.client import KofClient
@@ -77,7 +77,7 @@ def get_kof_connection(db: Session = Depends(get_db)) -> dict:
 def put_kof_connection(
     body: KofConnectionRequest,
     db: Session = Depends(get_db),
-    user=Depends(require_broker),
+    user=Depends(require_admin),
 ) -> dict:
     credentials = get_kof_credentials(db)
     if credentials is not None and credentials[2] == "env":
@@ -115,7 +115,7 @@ def put_kof_connection(
     return _connection_response(db)
 
 
-@router.delete("/connection", status_code=204)
+@router.delete("/connection", status_code=204, dependencies=[Depends(require_admin)])
 def delete_kof_connection(db: Session = Depends(get_db)) -> None:
     connection = db.get(KofConnection, 1)
     if connection is not None:

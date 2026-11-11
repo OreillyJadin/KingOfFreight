@@ -84,7 +84,9 @@ def begin(client):
     return parse_qs(urlsplit(response.headers["location"]).query)["state"][0]
 
 
-def test_credentials_encryption_precedence_disconnect_and_auth(client, db, monkeypatch):
+def test_credentials_encryption_precedence_disconnect_and_auth(
+    client, db, monkeypatch, admin_login
+):
     monkeypatch.setattr(get_settings(), "outlook_client_id", CLIENT_ID)
     monkeypatch.setattr(get_settings(), "outlook_client_secret", "env-secret")
     assert credentials(db).source == "env"

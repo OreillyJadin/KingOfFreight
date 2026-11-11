@@ -5,7 +5,7 @@ import { api } from "../api";
 import { useToast } from "../useToast";
 import { Button, Card, Field, Input, Skeleton } from "./ui";
 
-export default function OutlookSettings() {
+export default function OutlookSettings({ isAdmin = false }: { isAdmin?: boolean }) {
   const cache = useQueryClient();
   const { showToast } = useToast();
   const [params] = useSearchParams();
@@ -35,6 +35,7 @@ export default function OutlookSettings() {
     {query.isPending ? <Skeleton className="mt-4 h-11" /> : query.isError ? <div role="alert" className="mt-4 text-sm text-danger-ink"><p>{query.error.message}</p><Button className="mt-2 min-h-11" onClick={() => void query.refetch()}>Retry</Button></div> : <>
       <p className="mt-4 break-words text-sm font-semibold text-fg-2" role="status">{status}</p>
       {data?.status === "needs_reconnect" && <p className="mt-1 text-sm text-warn-ink">Microsoft authorization expired, was revoked, or needs renewed consent. Connect again to resume.</p>}
+      {isAdmin && <>
       <p className="mt-1 text-xs text-muted">{data?.source === "app" ? `App client ID: ${data.client_id}` : data?.source === "env" ? "Using server app credentials — save here to override." : "Enter your Azure app registration credentials below."}</p>
       <form className="mt-4 space-y-3" onSubmit={(event) => { event.preventDefault(); setError(""); save.mutate({ client_id: clientId.trim(), client_secret: secret.trim() }); }}>
         <Field htmlFor="outlook-client" label="Azure client ID"><Input id="outlook-client" value={clientId} onChange={(event) => setClientId(event.target.value)} placeholder={data?.client_id || "Application (client) ID"} required maxLength={36} autoComplete="off" autoCapitalize="none" spellCheck={false} disabled={busy} className="min-h-11 text-base" /></Field>
@@ -48,6 +49,8 @@ export default function OutlookSettings() {
         <p className="mt-3 select-all break-all rounded-xl border border-line bg-surface-2 p-3 text-xs text-fg-2">{data?.redirect_uri}</p>
         <Button className="mt-2 min-h-11" onClick={() => void copy()}>Copy redirect URI</Button>
       </div>
+      </>}
+      {!isAdmin && !data?.configured && <p className="mt-3 text-sm text-muted">Ask your admin to set up the Outlook app, then connect your mailbox here.</p>}
       <p className="mt-4 text-xs leading-relaxed text-muted">Your company's consent policy may still require IT approval. If Microsoft offers “request approval”, use that option. Only identified BOL PDFs or messages matching a known load/order/PO are saved; unrelated mail is discarded.</p>
       <div className="mt-4 flex flex-wrap gap-2"><Button variant="primary" className="min-h-11" disabled={busy || !data?.configured} onClick={() => { window.location.assign("/api/email/oauth/start"); }}>Connect Outlook</Button>{data?.account && <Button className="min-h-11" loading={disconnect.isPending} disabled={busy} onClick={() => disconnect.mutate()}>Disconnect</Button>}</div>
     </>}
