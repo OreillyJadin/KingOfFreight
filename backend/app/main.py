@@ -1,5 +1,6 @@
 import logging
 import os
+from time import perf_counter
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -32,6 +33,7 @@ from app.routers.kof_emails import router as kof_emails_router
 from app.routers.customer_updates import router as customer_updates_router
 from app.services.checkins import run_checkin_tick
 from app.services.usage import prune_usage_events, record_event
+from app.services.usage_health import actor_context, record_metric
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -122,6 +124,7 @@ async def password_setup_gate(request: Request, call_next: RequestResponseEndpoi
         "/api/auth/set-password",
         "/api/usage/events",
         "/api/usage/heartbeat",
+        "/api/usage/client-error",
         "/api/auth/logout",
         "/api/email/oauth/callback",
     }
@@ -146,7 +149,8 @@ async def usage_logging(request: Request, call_next: RequestResponseEndpoint):
         route = request.scope.get("route")
         for event, detail in getattr(request.state, "usage_events", []):
             if identity is not None and (
-                response.status_code < 400 or event == "assistant_question"
+                response.status_code < 400
+                or event in {"assistant_question", "llm_error"}
             ):
                 await run_in_threadpool(
                     record_event,
@@ -159,6 +163,33 @@ async def usage_logging(request: Request, call_next: RequestResponseEndpoint):
     except Exception:
         logger.warning("Usage request logging failed")
     return response
+
+
+@app.middleware("http")
+async def request_observability(request: Request, call_next: RequestResponseEndpoint):
+    token = actor_context.set(request.state)
+    started = perf_counter()
+    status_code = 500
+    try:
+        response = await call_next(request)
+        status_code = response.status_code
+        return response
+    finally:
+        duration = (perf_counter() - started) * 1000
+        actor_context.reset(token)
+        if status_code >= 500 or duration > 2000:
+            try:
+                route = request.scope.get("route")
+                await run_in_threadpool(
+                    record_metric,
+                    getattr(request.state, "usage_identity", None),
+                    getattr(route, "path", "/unmatched"),
+                    request.method,
+                    status_code,
+                    duration,
+                )
+            except Exception:
+                logger.warning("Request observability failed")
 
 
 app.add_middleware(

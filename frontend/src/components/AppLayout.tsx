@@ -33,6 +33,7 @@ import OperatorChooser from "./OperatorChooser";
 import { useCapabilities } from "../useCapabilities";
 import AdminClaimBanner from "./AdminClaimBanner";
 import UsageHeartbeat from "./UsageHeartbeat";
+import { watchClientErrors } from "../client-errors";
 
 const tabs = [
   { to: "/customer-updates", label: "Customer updates", icon: Mail, key: "customer-updates" },
@@ -162,6 +163,7 @@ function AlertsPanel({
 }
 
 export default function AppLayout({ children }: { children: ReactNode }) {
+  useEffect(() => watchClientErrors(), []);
   const auth = useQuery({ queryKey: ["auth"], queryFn: api.me });
   const isAdmin = auth.data?.role === "admin";
   const [operatorOpen, setOperatorOpen] = useState(false);

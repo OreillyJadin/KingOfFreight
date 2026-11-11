@@ -9,6 +9,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    Float,
     Index,
     Integer,
     LargeBinary,
@@ -382,6 +383,9 @@ class UsageMinute(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     identity: Mapped[str] = mapped_column(String(120))
     minute: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     path: Mapped[str] = mapped_column(String(160))
     user_id: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"), nullable=True
@@ -392,6 +396,47 @@ class UsageMinute(Base):
     )
     operator_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
     device: Mapped[str] = mapped_column(String(10))
+
+
+class UsageDaily(Base):
+    __tablename__ = "usage_daily"
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    day: Mapped[date] = mapped_column(Date, index=True)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    username: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    team_member_id: Mapped[int | None] = mapped_column(
+        ForeignKey("team_members.id", ondelete="SET NULL"), nullable=True
+    )
+    operator_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    active_minutes: Mapped[int] = mapped_column(Integer, default=0)
+    actions: Mapped[int] = mapped_column(Integer, default=0)
+    last_seen_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+
+
+class RequestMetric(Base):
+    __tablename__ = "request_metrics"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    path: Mapped[str] = mapped_column(String(200))
+    method: Mapped[str] = mapped_column(String(10))
+    status: Mapped[int] = mapped_column(Integer)
+    duration_ms: Mapped[float] = mapped_column(Float)
+    user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    username: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    team_member_id: Mapped[int | None] = mapped_column(
+        ForeignKey("team_members.id", ondelete="SET NULL"), nullable=True
+    )
+    operator_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    kind: Mapped[str] = mapped_column(String(10), default="server")
+    message: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=utcnow, index=True
+    )
 
 
 class CustomerContact(Base):

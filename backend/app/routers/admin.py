@@ -18,7 +18,8 @@ from app.db import get_db
 from app.models import User, utcnow
 from app.routers.auth import _set_session_cookie
 from app.services.usage_report import report
-from app.services.usage_analytics import Analytics
+from app.services.usage_visuals import Visuals
+from app.services.usage_health import health_report
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
@@ -43,6 +44,13 @@ def usage_analytics(
         "response_speed",
         "features",
         "leaderboard",
+        "contributions",
+        "timeline",
+        "trend",
+        "live",
+        "flows",
+        "users_overview",
+        "health",
     ],
     period: Literal["day", "week", "month"] = "week",
     date: Date | None = None,
@@ -50,9 +58,21 @@ def usage_analytics(
     identity: str | None = Query(default=None, max_length=120),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    days: int = Query(default=90, ge=1, le=365),
+    interval: Literal["day", "week"] = "day",
     db: Session = Depends(get_db),
 ):
-    analytics = Analytics(db, period, date, exclude_admins)
+    if section in {"contributions", "trend"} and date is not None and date.year < 2:
+        raise HTTPException(422, "Date is outside the supported history range")
+    analytics = Visuals(
+        db, "day" if section == "timeline" else period, date, exclude_admins
+    )
+    if section == "contributions":
+        return analytics.contributions(date)
+    if section == "trend":
+        return analytics.trend(date, days, interval)
+    if section == "health":
+        return health_report(analytics)
     if section == "feed":
         return analytics.feed(identity, limit, offset)
     return getattr(analytics, section)()

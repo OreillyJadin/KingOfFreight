@@ -448,7 +448,7 @@ def test_retention_and_migration(client, db, clock, monkeypatch, tmp_path):
     with sqlite3.connect(database) as conn:
         assert (
             conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
-            == "c92f1e7043a6"
+            == "d03af21982bc"
         )
         conn.execute(
             "INSERT INTO usage_minutes(identity,minute,path,device) VALUES ('Tony','2026-11-09 18:00:00','/loads','mobile')"

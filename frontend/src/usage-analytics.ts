@@ -1,3 +1,5 @@
+import type { VisualResponses } from "./usage-visuals";
+
 export type UsagePeriod = "day" | "week" | "month";
 export type UsageFilters = { period: UsagePeriod; date: string; exclude_admins: boolean };
 export type UsageMeta = UsageFilters & { timezone: string; start: string; end_exclusive: string };
@@ -10,7 +12,7 @@ export type UsagePage = { identity: string; path: string; active_minutes: number
 export type HeatCell = { weekday: number; hour: number; active_minutes: number };
 export type UsageFeedItem = { id: number; identity: string; event: string; path: string | null; device: string; time: string; summary: string; detail: Record<string, unknown> };
 export type UsageOutput = { name: string | null; loads: number; revenue: number; carrier_cost: number; profit: number; margin_pct: number | null };
-export type UsageResponses = {
+export type UsageResponses = VisualResponses & {
   people: UsageMeta & { people: UsagePerson[] };
   pages: UsageMeta & { pages: UsagePage[] };
   heatmap: UsageMeta & { cells: (HeatCell & { identity: string })[]; total: HeatCell[] };
@@ -21,7 +23,8 @@ export type UsageResponses = {
   leaderboard: UsageMeta & { people: { identity: string; active_minutes: number; actions: number; kof_profit: number | null; active_minutes_rank: number; actions_rank: number; kof_profit_rank: number | null }[] };
 };
 
-export function usageQuery(filters: UsageFilters, extra: { identity?: string; limit?: number; offset?: number } = {}) {
+export type UsageExtra = { identity?: string; limit?: number; offset?: number; days?: number; interval?: "day" | "week" };
+export function usageQuery(filters: UsageFilters, extra: UsageExtra = {}) {
   const params = new URLSearchParams({ period: filters.period, date: filters.date, exclude_admins: String(filters.exclude_admins) });
   for (const [key, value] of Object.entries(extra)) if (value !== undefined) params.set(key, String(value));
   return params.toString();

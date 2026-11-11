@@ -45,7 +45,19 @@ FEATURES = {
     "outlook_connect": "Connected Outlook",
     "operator_switched": "Switched operator",
 }
-NON_ACTIONS = {"page_view", "assistant_question_submitted"}
+NON_ACTIONS = {"page_view", "assistant_question_submitted", "llm_error"}
+
+
+def event_summary(row):
+    detail = row.detail if isinstance(row.detail, dict) else {}
+    text = FEATURES.get(row.event, row.event.replace("_", " ").capitalize())
+    if row.event == "page_view":
+        return f"Viewed {row.path or 'page'}"
+    if detail.get("order_no") is not None:
+        text += f" for order {detail['order_no']}"
+    elif detail.get("reference") or detail.get("load_id"):
+        text += f" for load {detail.get('reference') or detail['load_id']}"
+    return text
 
 
 def identity(row) -> str:
@@ -240,13 +252,6 @@ class Analytics:
         items = []
         for row in rows:
             detail = row.detail if isinstance(row.detail, dict) else {}
-            summary = FEATURES.get(row.event, row.event.replace("_", " ").capitalize())
-            if row.event == "page_view":
-                summary = f"Viewed {row.path or 'page'}"
-            elif detail.get("order_no") is not None:
-                summary += f" for order {detail['order_no']}"
-            elif detail.get("reference") or detail.get("load_id"):
-                summary += f" for load {detail.get('reference') or detail['load_id']}"
             items.append(
                 {
                     "id": row.id,
@@ -255,7 +260,7 @@ class Analytics:
                     "path": row.path,
                     "device": row.device,
                     "time": self.local(row.created_at),
-                    "summary": summary,
+                    "summary": event_summary(row),
                     "detail": detail,
                 }
             )
