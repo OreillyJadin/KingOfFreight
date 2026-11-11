@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.db import SessionLocal
 from app.schemas import BolExtraction, CarrierUpdate, ReplyParse
 from app.services.assistant_credentials import get_assistant_key
+from app.services.usage_health import record_llm_error
 
 logger = logging.getLogger(__name__)
 
@@ -340,6 +341,7 @@ class FallbackLlmProvider:
         try:
             return self.primary.classify_carrier_update(text)
         except (anthropic.AnthropicError, ValueError) as error:
+            record_llm_error("carrier_classification", error)
             logger.warning("Carrier classification fallback: %s", type(error).__name__)
             return self.fallback.classify_carrier_update(text)
 
@@ -347,6 +349,7 @@ class FallbackLlmProvider:
         try:
             return self.primary.extract_bol(pdf_bytes, filename)
         except (anthropic.AnthropicError, ValueError) as error:
+            record_llm_error("bol_extraction", error)
             logger.warning("BOL extraction fallback: %s", type(error).__name__)
             return self.fallback.extract_bol(pdf_bytes, filename)
 
@@ -354,6 +357,7 @@ class FallbackLlmProvider:
         try:
             return self.primary.parse_reply(reply_text, context)
         except (anthropic.AnthropicError, ValueError) as error:
+            record_llm_error("reply_parsing", error)
             logger.warning("Reply parsing fallback: %s", type(error).__name__)
             return self.fallback.parse_reply(reply_text, context)
 

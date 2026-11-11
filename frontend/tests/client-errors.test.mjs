@@ -1,0 +1,61 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFileSync } from "node:fs";
+import ts from "typescript";
+
+const { outputText } = ts.transpileModule(readFileSync(new URL("../src/client-errors.ts", import.meta.url), "utf8"), { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext } });
+const { watchClientErrors } = await import(`data:text/javascript;base64,${Buffer.from(outputText).toString("base64")}`);
+
+test("client errors capture browser errors and rejections, truncate, rate limit and clean up", async () => {
+  const target = new EventTarget();
+  const sent = [];
+  target.location = { pathname: "/loads" };
+  target.fetch = async (path, options) => { sent.push({ path, ...JSON.parse(options.body) }); };
+  const stop = watchClientErrors(target);
+  const error = new Event("error");
+  error.message = "x".repeat(1100);
+  target.dispatchEvent(error);
+  const rejection = new Event("unhandledrejection");
+  rejection.reason = Error("offline");
+  target.dispatchEvent(rejection);
+  for (let i = 0; i < 8; i++) target.dispatchEvent(error);
+  assert.equal(sent.length, 5);
+  assert.equal(sent[0].message.length, 1000);
+  assert.equal(sent[1].message, "offline");
+  assert.equal(sent[0].path, "/loads");
+  stop();
+  target.dispatchEvent(rejection);
+  assert.equal(sent.length, 5);
+  const isolated = new EventTarget();
+  isolated.location = target.location;
+  isolated.fetch = () => Promise.reject(Error("network unavailable"));
+  const cleanup = watchClientErrors(isolated);
+  isolated.dispatchEvent(error);
+  await new Promise(resolve => setImmediate(resolve));
+  cleanup();
+});
+
+test("empty errors have fallbacks, the limit resets, and synchronous failures are isolated", (context) => {
+  let now = 0;
+  context.mock.method(Date, "now", () => now);
+  const target = new EventTarget();
+  const sent = [];
+  target.location = { pathname: "/loads" };
+  target.fetch = async (_path, options) => { sent.push(JSON.parse(options.body)); };
+  const stop = watchClientErrors(target);
+  target.dispatchEvent(new Event("error"));
+  target.dispatchEvent(new Event("unhandledrejection"));
+  assert.equal(sent[0].message, "Unhandled browser error");
+  assert.equal(sent[1].message, "Unhandled promise rejection");
+  for (let i = 0; i < 8; i++) target.dispatchEvent(new Event("error"));
+  assert.equal(sent.length, 5);
+  now = 60_000;
+  const rejection = new Event("unhandledrejection");
+  rejection.reason = "offline";
+  target.dispatchEvent(rejection);
+  assert.equal(sent.length, 6);
+  assert.equal(sent[5].message, "offline");
+  target.fetch = () => { throw Error("fetch unavailable"); };
+  assert.doesNotThrow(() => target.dispatchEvent(new Event("error")));
+  stop();
+});
