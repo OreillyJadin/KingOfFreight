@@ -32,6 +32,7 @@ import AssistantWidget from "./AssistantWidget";
 import OperatorChooser from "./OperatorChooser";
 import { useCapabilities } from "../useCapabilities";
 import AdminClaimBanner from "./AdminClaimBanner";
+import UsageHeartbeat from "./UsageHeartbeat";
 
 const tabs = [
   { to: "/customer-updates", label: "Customer updates", icon: Mail, key: "customer-updates" },
@@ -261,6 +262,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   if (forcedOperator || operatorOpen) return <OperatorChooser onSelected={() => setOperatorOpen(false)} onCancel={!forcedOperator ? () => setOperatorOpen(false) : undefined} allowClear={isAdmin} onLogout={() => void logout()} />;
   return (
     <div className="min-h-screen bg-bg pb-24 text-fg md:pb-0">
+      {auth.data?.authenticated && <UsageHeartbeat path={location.pathname} identity={`${auth.data.username ?? "shared"}:${auth.data.operator?.id ?? "none"}`} />}
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[200] rounded-lg bg-surface px-4 py-2 text-sm font-semibold text-fg shadow-card">Skip to content</a>
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-surface md:flex">
         <NavLink to="/dashboard" className="flex h-[68px] shrink-0 items-center gap-2.5 px-5">
