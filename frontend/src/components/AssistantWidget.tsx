@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { api, ApiError, type AssistantMessage, type AssistantReply } from "../api";
+import { trackUsage } from "../usage";
 import Modal from "./Modal";
 import KofTextActionCard, { type TextDraft } from "./KofTextActionCard";
 import KofEmailActionCard, { type EmailDraft } from "./KofEmailActionCard";
@@ -47,6 +48,7 @@ export default function AssistantWidget() {
   async function send(prompt = draft) {
     const content = prompt.trim();
     if (!content || busy.current) return;
+    trackUsage("assistant_question_submitted");
     const next: ChatMessage[] = [...messages, { role: "user", content }];
     const history = next.slice(-29).map(({ role, content: text }) => ({ role, content: text.slice(0, 8000) }));
     while (history.length > 1 && history.reduce((size, message) => size + message.content.length, 0) > 32000) history.shift();
@@ -69,6 +71,7 @@ export default function AssistantWidget() {
   }
 
   function suggest(prompt: string) {
+    trackUsage("suggestion_clicked");
     if (prompt.includes("…")) { setDraft(prompt); input.current?.focus(); }
     else void send(prompt);
   }
@@ -76,7 +79,7 @@ export default function AssistantWidget() {
   if (!capabilities.data?.assistant_live) return null;
   return (
     <>
-      {!open && <Button icon={MessageCircle} className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-4 z-40 min-h-12 rounded-full border-line-strong bg-surface px-5 shadow-xl md:bottom-6 md:right-6" onClick={() => setOpen(true)} aria-haspopup="dialog">Ask</Button>}
+      {!open && <Button icon={MessageCircle} className="fixed bottom-[calc(5.25rem+env(safe-area-inset-bottom))] right-4 z-40 min-h-12 rounded-full border-line-strong bg-surface px-5 shadow-xl md:bottom-6 md:right-6" onClick={() => { trackUsage("assistant_opened"); setOpen(true); }} aria-haspopup="dialog">Ask</Button>}
       {open && (
         <Modal title="Ask Fifth Wheel" eyebrow="AI assistant · Review before sending" layout="side" onClose={() => setOpen(false)}>
           <div className="flex shrink-0 items-center justify-between gap-3 border-b border-line px-5 py-2">

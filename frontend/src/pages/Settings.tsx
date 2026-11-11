@@ -10,6 +10,7 @@ import { ChangePasswordCard, KofSyncCard } from "../kof/SettingsSections";
 import AssistantSettings from "../components/AssistantSettings";
 import TwilioSettings from "../components/TwilioSettings";
 import OutlookSettings from "../components/OutlookSettings";
+import TeamMembersCard from "../components/TeamMembersCard";
 
 const timezones = [
   ["Eastern", "America/New_York"],
@@ -206,6 +207,7 @@ export default function Settings() {
         </Button>
       </form>
       <div className="mt-8 space-y-5">
+        <TeamMembersCard />
         {isAdmin && <AssistantSettings />}
         {isAdmin && <TwilioSettings />}
         <OutlookSettings isAdmin={isAdmin} />

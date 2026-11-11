@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, joinedload
 from twilio.request_validator import RequestValidator
 
 from app.auth import require_broker
+from app.services.usage import feature_event
 from app.db import get_db
 from app.integrations.email import EmailProvider, get_email_provider, resolve_email_mode
 from app.integrations.fmcsa import FmcsaProvider, get_fmcsa_provider
@@ -473,6 +474,7 @@ def list_status_updates(
 def approve_status(
     update_id: int,
     payload: ApproveStatus,
+    request: Request,
     db: Session = Depends(get_db),
     sms: SmsProvider = Depends(get_sms_provider),
     email: EmailProvider = Depends(get_email_provider),
@@ -514,6 +516,9 @@ def approve_status(
     update.state = "sent"
     db.commit()
     db.refresh(update)
+    feature_event(
+        request, "operational_send", {"channel": channel, "action": "customer_update"}
+    )
     return update
 
 
@@ -582,6 +587,7 @@ def get_checkin(checkin_id: int, db: Session = Depends(get_db)) -> ScheduledChec
 @protected.post("/checkins/{checkin_id}/send-now", response_model=CheckInOut)
 def send_checkin_now(
     checkin_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     sms: SmsProvider = Depends(get_sms_provider),
     email: EmailProvider = Depends(get_email_provider),
@@ -614,6 +620,11 @@ def send_checkin_now(
     checkin.alert_dismissed_at = None
     db.commit()
     db.refresh(checkin)
+    feature_event(
+        request,
+        "operational_send",
+        {"channel": checkin.checkin_channel, "action": "checkin"},
+    )
     return _orm_values(checkin)
 
 
@@ -707,6 +718,7 @@ def archive_communication(
 
 @protected.post("/bol/upload", response_model=CommunicationOut)
 async def upload_bol(
+    request: Request,
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
     llm: LlmProvider = Depends(get_llm_provider),
@@ -735,6 +747,7 @@ async def upload_bol(
     db.add(communication)
     db.commit()
     db.refresh(communication)
+    feature_event(request, "bol_upload_extract")
     return communication
 
 
@@ -838,6 +851,7 @@ def bol_file(communication_id: int, db: Session = Depends(get_db)) -> Response:
 @protected.post("/loads/{load_id}/send-tracking-link", response_model=CommunicationOut)
 def send_tracking_link(
     load_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     sms: SmsProvider = Depends(get_sms_provider),
     email: EmailProvider = Depends(get_email_provider),
@@ -864,6 +878,9 @@ def send_tracking_link(
     )
     db.commit()
     db.refresh(communication)
+    feature_event(
+        request, "operational_send", {"channel": channel, "action": "tracking_link"}
+    )
     return communication
 
 

@@ -11,6 +11,7 @@ from pydantic import BaseModel, SecretStr
 from sqlalchemy.orm import Session
 
 from app.auth import COOKIE_NAME, require_admin, require_broker
+from app.services.usage import feature_event
 from app.config import get_settings
 from app.db import get_db
 from app.models import OutlookApp, OutlookConnection
@@ -219,6 +220,7 @@ def callback(
         row.name = profile.get("displayName") or email
         row.needs_reconnect = False
         db.commit()
+        feature_event(request, "outlook_connect")
         return result("", connected=True)
     except OAuthError as error:
         return result(str(error))

@@ -23,6 +23,7 @@ from app.models import (
     KofLoad,
     OutlookApp,
     OutlookConnection,
+    UsageEvent,
     User,
 )
 from app.routers.api import _ingest_email_message
@@ -243,6 +244,10 @@ def test_code_exchange_encrypted_token_and_account(client, db, monkeypatch):
         follow_redirects=False,
     )
     assert response.headers["location"] == "/settings?outlook=connected"
+    assert (
+        db.scalar(select(UsageEvent).where(UsageEvent.event == "outlook_connect"))
+        is not None
+    )
     token = db.get(OutlookConnection, 1)
     assert token.email == "scotti@company.com" and token.name == "Scotti"
     assert token.token_encrypted != "refresh-secret"

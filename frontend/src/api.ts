@@ -15,6 +15,9 @@ import type {
 
 type RequestOptions = RequestInit & { redirectOn401?: boolean };
 
+export type TeamMember = { id: number; name: string; is_active: boolean; created_at: string };
+export type AuthSession = { authenticated: boolean; broker_timezone: string; username: string | null; must_set_password: boolean; role: "admin" | "member" | null; can_claim_admin: boolean; operator: { id: number; name: string } | null; team_members_exist: boolean };
+
 export type UserAccount = {
   id: number;
   username: string;
@@ -23,6 +26,18 @@ export type UserAccount = {
   must_set_password: boolean;
   created_at: string;
   last_login_at: string | null;
+};
+
+export type UsageReport = {
+  days: number;
+  timezone: string;
+  totals: { events: number; active_users: number; chat_questions: number; page_views: number };
+  daily: { date: string; active_users: number; questions: number }[];
+  users: { user_id: number | null; username: string | null; operator_name: string | null; team_member_id: number | null; label: string; last_seen: string; page_views: number; questions: number; top_page: string | null; devices: Record<string, number> }[];
+  top_pages: { name: string; count: number }[];
+  top_features: { name: string; count: number }[];
+  devices: Record<string, number>;
+  questions: { username: string | null; user: string; time: string; text: string }[];
 };
 
 export class ApiError extends Error {
@@ -118,6 +133,10 @@ export type CustomerUpdateDraft = {
 };
 
 export const api = {
+  teamMembers: () => request<TeamMember[]>("/team-members"),
+  addTeamMember: (name: string) => request<TeamMember>("/team-members", json("POST", { name })),
+  updateTeamMember: (id: number, body: { name?: string; is_active?: boolean }) => request<TeamMember>(`/team-members/${id}`, json("PATCH", body)),
+  selectOperator: (team_member_id: number | null) => request<AuthSession>("/auth/operator", json("POST", { team_member_id })),
   customerUpdates: () => request<{ count: number; drafts: CustomerUpdateDraft[]; email_mode: "outlook" | "graph" | "mock" }>("/customer-updates"),
   editCustomerUpdate: (id: number, body: { version: number; to_email: string; subject: string; body: string }) => request<CustomerUpdateDraft>(`/customer-updates/${id}`, json("PATCH", body)),
   approveCustomerUpdate: (id: number, version: number) => request<CustomerUpdateDraft>(`/customer-updates/${id}/approve`, json("POST", { version })),
@@ -158,18 +177,12 @@ export const api = {
   logout: () => request<{ authenticated: boolean }>("/auth/logout", json("POST")),
   claimAdmin: (username: string, password: string) => request<UserAccount>("/admin/claim", json("POST", { username, password })),
   users: () => request<UserAccount[]>("/admin/users"),
+  usage: (days: 7 | 30 | 90) => request<UsageReport>(`/admin/usage?days=${days}`),
   createUser: (body: { username: string; password: string; role: "admin" | "member" }) => request<UserAccount>("/admin/users", json("POST", body)),
   updateUser: (id: number, body: { role?: "admin" | "member"; is_active?: boolean }) => request<UserAccount>(`/admin/users/${id}`, json("PATCH", body)),
   resetUserPassword: (id: number, password: string) => request<UserAccount>(`/admin/users/${id}/reset-password`, json("POST", { password })),
   me: () =>
-    request<{
-      authenticated: boolean;
-      broker_timezone: string;
-      username?: string | null;
-      must_set_password?: boolean;
-      role: "admin" | "member" | null;
-      can_claim_admin: boolean;
-    }>("/auth/me"),
+    request<AuthSession>("/auth/me"),
   settings: () => request<BrokerPrefs>("/settings"),
   updateSettings: (partial: BrokerPrefsUpdate) =>
     request<BrokerPrefs>("/settings", json("PUT", partial)),

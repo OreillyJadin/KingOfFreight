@@ -52,6 +52,8 @@ def test_bootstrap_login_password_setup_gating_and_session_invalidation(
                 "must_set_password": True,
                 "role": "member",
                 "can_claim_admin": False,
+                "operator": None,
+                "team_members_exist": False,
             }
             assert client.get("/api/loads").status_code == 403
             assert client.get("/api/track/not-a-real-token").status_code == 403

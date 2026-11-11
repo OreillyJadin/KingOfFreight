@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   Bell,
+  BarChart3,
   Boxes,
   Briefcase,
   Building2,
@@ -28,6 +29,7 @@ import { Badge, Button, Card } from "./ui";
 import { Wordmark } from "./Brand";
 import ThemeToggle from "./ThemeToggle";
 import AssistantWidget from "./AssistantWidget";
+import OperatorChooser from "./OperatorChooser";
 import { useCapabilities } from "../useCapabilities";
 import AdminClaimBanner from "./AdminClaimBanner";
 
@@ -161,6 +163,7 @@ function AlertsPanel({
 export default function AppLayout({ children }: { children: ReactNode }) {
   const auth = useQuery({ queryKey: ["auth"], queryFn: api.me });
   const isAdmin = auth.data?.role === "admin";
+  const [operatorOpen, setOperatorOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -177,6 +180,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       "/status": "Delivery Status · Fifth Wheel",
       "/settings": "Settings · Fifth Wheel",
       "/users": "Users · Fifth Wheel",
+      "/usage": "Usage · Fifth Wheel",
       "/dashboard": "Dashboard · Fifth Wheel",
       "/tracking": "Tracking · Fifth Wheel",
       "/loads": "Loads · Fifth Wheel",
@@ -253,6 +257,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     alertsTrigger.current = trigger;
     setAlertsOpen(true);
   }
+  const forcedOperator = auth.data?.team_members_exist && !auth.data.operator && !isAdmin;
+  if (forcedOperator || operatorOpen) return <OperatorChooser onSelected={() => setOperatorOpen(false)} onCancel={!forcedOperator ? () => setOperatorOpen(false) : undefined} allowClear={isAdmin} onLogout={() => void logout()} />;
   return (
     <div className="min-h-screen bg-bg pb-24 text-fg md:pb-0">
       <a href="#main" className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[200] rounded-lg bg-surface px-4 py-2 text-sm font-semibold text-fg shadow-card">Skip to content</a>
@@ -314,6 +320,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           Settings
         </NavLink>
         {isAdmin && <NavLink to="/users" className="mx-3 flex min-h-11 items-center gap-3 rounded-xl px-3 text-sm font-semibold text-fg-2 hover:bg-surface-2"><Users className="h-4 w-4" />Users</NavLink>}
+        {isAdmin && <NavLink to="/usage" className={sideLink}><BarChart3 className="h-4 w-4" />Usage</NavLink>}
         </div>
         <div className="border-t border-line p-3">
           <NavLink
@@ -377,6 +384,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
       </aside>
+      <header className="sticky top-0 z-30 hidden justify-end border-b border-line bg-surface/90 px-6 py-2 backdrop-blur md:ml-60 md:flex"><button className="min-h-11 max-w-full break-words text-sm font-semibold" onClick={() => setOperatorOpen(true)} aria-label="Switch operator">Using as {auth.data?.operator?.name ?? "login identity"} · Switch</button></header>
       <header className="sticky top-0 z-30 border-b border-line bg-surface/90 backdrop-blur md:hidden">
         <div className="mx-auto flex h-[68px] max-w-6xl items-center justify-between px-4 sm:px-6">
           <NavLink to="/dashboard" className="flex min-w-0 items-center gap-2.5">
@@ -437,6 +445,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             </Button>
           </div>
         </div>
+        <div className="border-t border-line px-4"><button className="min-h-11 w-full break-words py-2 text-left text-sm font-semibold" onClick={() => setOperatorOpen(true)} aria-label="Switch operator">Using as {auth.data?.operator?.name ?? "login identity"} <span className="text-muted">· Switch</span></button></div>
       </header>
       <main id="main" tabIndex={-1} className="mx-auto max-w-[1400px] px-4 pb-24 pt-6 sm:px-6 md:pb-10 md:pl-60 focus:outline-none">
         {!auth.data?.username && auth.data?.can_claim_admin && <AdminClaimBanner />}
@@ -444,7 +453,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </main>
       <nav aria-label="Main" className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         <div className="flex snap-x gap-0.5 overflow-x-auto px-2 pt-1.5 [scrollbar-width:none]">
-          {[...mobileTabs, ...(isAdmin ? [{ to: "/users", label: "Users", icon: Users, key: "" }] : [])].filter(tab => tab.key !== "customer-updates" || capabilities.data?.email_live).map(({ to, label, icon: Icon, key }) => (
+          {[...mobileTabs, ...(isAdmin ? [{ to: "/users", label: "Users", icon: Users, key: "" }, { to: "/usage", label: "Usage", icon: BarChart3, key: "" }] : [])].filter(tab => tab.key !== "customer-updates" || capabilities.data?.email_live).map(({ to, label, icon: Icon, key }) => (
             <NavLink
               key={to}
               to={to}

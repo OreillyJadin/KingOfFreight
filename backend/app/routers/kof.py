@@ -4,7 +4,7 @@ import re
 from typing import Literal
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import (
     Integer,
@@ -20,6 +20,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import Session
 
 from app.auth import require_admin, require_broker
+from app.services.usage import feature_event
 from app.config import get_settings
 from app.db import get_db
 from app.integrations.kof.client import KofClient
@@ -713,6 +714,7 @@ def sync_status(db: Session = Depends(get_db)) -> dict:
 
 @router.post("/sync", status_code=202)
 def start_sync_endpoint(
+    request: Request,
     kind: Literal["incremental", "full"] = Query(default="incremental"),
     db: Session = Depends(get_db),
 ) -> dict[str, bool]:
@@ -726,6 +728,7 @@ def start_sync_endpoint(
         ) from exc
     if run_id is None:
         raise HTTPException(status_code=409, detail="KOF sync is already running")
+    feature_event(request, "kof_manual_sync", {"kind": kind})
     return {"started": True}
 
 

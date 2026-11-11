@@ -12,6 +12,8 @@ import Tracking from "./pages/Tracking";
 import TruckStop from "./pages/TruckStop";
 import SetPassword from "./pages/SetPassword";
 import Users from "./pages/Users";
+import Usage from "./pages/Usage";
+import UsageTracking from "./UsageTracking";
 import Dashboard from "./pages/kof/Dashboard";
 import KofTracking from "./pages/kof/KofTracking";
 import Loads from "./pages/kof/Loads";
@@ -49,6 +51,7 @@ function ProtectedApp() {
         <Route path="/status" element={<Status />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/users" element={<Users />} />
+        <Route path="/usage" element={<Usage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Routes>
     </AppLayout>
@@ -57,11 +60,11 @@ function ProtectedApp() {
 
 export default function App() {
   return (
-    <Routes>
+    <><UsageTracking /><Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/set-password" element={<SetPassword />} />
       <Route path="/t/:token" element={<Tracking />} />
       <Route path="/*" element={<ProtectedApp />} />
-    </Routes>
+    </Routes></>
   );
 }

@@ -10,6 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import RequestResponseEndpoint
 from starlette.responses import Response
+from starlette.concurrency import run_in_threadpool
 from starlette.types import Scope
 
 from app.auth import COOKIE_NAME, decode_session, ensure_bootstrap_user, session_user
@@ -20,6 +21,8 @@ from app.integrations.llm import get_llm_provider
 from app.routers.api import _ingest_email_message, dev_public, protected, public
 from app.routers.auth import router as auth_router
 from app.routers.admin import router as admin_router
+from app.routers.usage import router as usage_router
+from app.routers.team_members import router as team_members_router
 from app.routers.assistant import router as assistant_router
 from app.routers.twilio import router as twilio_router
 from app.routers.outlook import router as outlook_router
@@ -28,6 +31,7 @@ from app.routers.kof_messages import router as kof_messages_router
 from app.routers.kof_emails import router as kof_emails_router
 from app.routers.customer_updates import router as customer_updates_router
 from app.services.checkins import run_checkin_tick
+from app.services.usage import prune_usage_events, record_event
 
 settings = get_settings()
 logger = logging.getLogger(__name__)
@@ -50,6 +54,7 @@ class ImmutableStaticFiles(StaticFiles):
 
 
 def _run_tick() -> None:
+    prune_usage_events()
     with SessionLocal() as db:
         run_checkin_tick(db)
 
@@ -115,6 +120,7 @@ async def password_setup_gate(request: Request, call_next: RequestResponseEndpoi
     allowed_paths = {
         "/api/auth/me",
         "/api/auth/set-password",
+        "/api/usage/events",
         "/api/auth/logout",
         "/api/email/oauth/callback",
     }
@@ -131,6 +137,29 @@ async def password_setup_gate(request: Request, call_next: RequestResponseEndpoi
     return await call_next(request)
 
 
+@app.middleware("http")
+async def usage_logging(request: Request, call_next: RequestResponseEndpoint):
+    response = await call_next(request)
+    try:
+        identity = getattr(request.state, "usage_identity", None)
+        route = request.scope.get("route")
+        for event, detail in getattr(request.state, "usage_events", []):
+            if identity is not None and (
+                response.status_code < 400 or event == "assistant_question"
+            ):
+                await run_in_threadpool(
+                    record_event,
+                    identity,
+                    event,
+                    getattr(route, "path", None),
+                    request.headers.get("user-agent", ""),
+                    {**(detail or {}), "status_code": response.status_code},
+                )
+    except Exception:
+        logger.warning("Usage request logging failed")
+    return response
+
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
@@ -140,6 +169,8 @@ app.add_middleware(
 )
 app.include_router(auth_router)
 app.include_router(admin_router)
+app.include_router(usage_router)
+app.include_router(team_members_router)
 app.include_router(assistant_router)
 app.include_router(twilio_router)
 app.include_router(outlook_router)
