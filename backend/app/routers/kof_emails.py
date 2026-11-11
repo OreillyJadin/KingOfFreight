@@ -45,8 +45,10 @@ def emails(order_no: int, db: Session = Depends(get_db)):
 
 
 @router.get("/{order_no}/emails/draft")
-def compose(order_no: int, db: Session = Depends(get_db)):
-    return template(db, order_no)
+def compose(order_no: int, request: Request, db: Session = Depends(get_db)):
+    result = template(db, order_no)
+    feature_event(request, "kof_email_draft", {"order_no": order_no})
+    return result
 
 
 @router.post("/{order_no}/emails")
@@ -79,5 +81,5 @@ def send(
     db.add(row)
     db.commit()
     db.refresh(row)
-    feature_event(request, "kof_email_send")
+    feature_event(request, "kof_email_send", {"order_no": order_no})
     return email_dict(row)

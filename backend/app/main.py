@@ -121,6 +121,7 @@ async def password_setup_gate(request: Request, call_next: RequestResponseEndpoi
         "/api/auth/me",
         "/api/auth/set-password",
         "/api/usage/events",
+        "/api/usage/heartbeat",
         "/api/auth/logout",
         "/api/email/oauth/callback",
     }

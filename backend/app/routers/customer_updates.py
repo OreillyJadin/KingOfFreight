@@ -125,7 +125,11 @@ def dismiss(
     row.updated_at = utcnow()
     db.commit()
     drain_deferred(db, row)
-    feature_event(request, "customer_update_dismiss")
+    feature_event(
+        request,
+        "customer_update_dismiss",
+        {"order_no": row.order_no, "draft_id": row.id},
+    )
     return draft_dict(db, row)
 
 
@@ -203,5 +207,9 @@ def approve(
     row.version += 1
     db.commit()
     drain_deferred(db, row)
-    feature_event(request, "customer_update_approve")
+    feature_event(
+        request,
+        "customer_update_approve",
+        {"order_no": row.order_no, "draft_id": row.id},
+    )
     return draft_dict(db, row)

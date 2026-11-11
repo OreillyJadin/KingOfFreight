@@ -1,4 +1,5 @@
 from typing import Literal
+from datetime import date as Date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel, Field, field_validator
@@ -17,15 +18,44 @@ from app.db import get_db
 from app.models import User, utcnow
 from app.routers.auth import _set_session_cookie
 from app.services.usage_report import report
+from app.services.usage_analytics import Analytics
 
 router = APIRouter(prefix="/api/admin", tags=["Admin"])
 
 
 @router.get("/usage", dependencies=[Depends(require_admin)])
 def usage(
-    days: Literal["7", "30", "90"] = Query(default="7"), db: Session = Depends(get_db)
+    days: Literal["7", "30", "90"] = Query(default="7"),
+    exclude_admins: bool = True,
+    db: Session = Depends(get_db),
 ):
-    return report(db, int(days))
+    return report(db, int(days), exclude_admins)
+
+
+@router.get("/usage/{section}", dependencies=[Depends(require_admin)])
+def usage_analytics(
+    section: Literal[
+        "people",
+        "pages",
+        "heatmap",
+        "feed",
+        "kof_output",
+        "response_speed",
+        "features",
+        "leaderboard",
+    ],
+    period: Literal["day", "week", "month"] = "week",
+    date: Date | None = None,
+    exclude_admins: bool = True,
+    identity: str | None = Query(default=None, max_length=120),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    db: Session = Depends(get_db),
+):
+    analytics = Analytics(db, period, date, exclude_admins)
+    if section == "feed":
+        return analytics.feed(identity, limit, offset)
+    return getattr(analytics, section)()
 
 
 class Credentials(BaseModel):

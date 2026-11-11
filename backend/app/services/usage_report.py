@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models import UsageEvent, utcnow
 from app.services.preferences import get_prefs
+from app.services.usage_analytics import admin_filter, identity
 
 
 def ranked(counts: Counter) -> list[dict]:
@@ -16,15 +17,18 @@ def ranked(counts: Counter) -> list[dict]:
     ]
 
 
-def report(db: Session, days: int) -> dict:
+def report(db: Session, days: int, exclude_admins: bool = True) -> dict:
     zone = ZoneInfo(get_prefs(db).broker_timezone)
     now = utcnow()
     first_day = now.astimezone(zone).date() - timedelta(days=days - 1)
     start = datetime.combine(first_day, time.min, zone).astimezone(timezone.utc)
+    query = select(UsageEvent)
+    if exclude_admins:
+        query = query.where(admin_filter(UsageEvent))
     rows = db.scalars(
-        select(UsageEvent)
-        .where(UsageEvent.created_at >= start, UsageEvent.created_at <= now)
-        .order_by(UsageEvent.created_at, UsageEvent.id)
+        query.where(
+            UsageEvent.created_at >= start, UsageEvent.created_at <= now
+        ).order_by(UsageEvent.created_at, UsageEvent.id)
     ).all()
     daily = {
         (first_day + timedelta(days=index)).isoformat(): {
@@ -42,11 +46,7 @@ def report(db: Session, days: int) -> dict:
         if stamp.tzinfo is None:
             stamp = stamp.replace(tzinfo=timezone.utc)
         stamp = stamp.astimezone(zone)
-        key = (
-            ("operator", row.operator_name)
-            if row.operator_name
-            else ("user", row.user_id, row.username)
-        )
+        key = identity(row)
         day = daily[stamp.date().isoformat()]
         day["users"].add(key)
         user = users.setdefault(
@@ -99,6 +99,7 @@ def report(db: Session, days: int) -> dict:
     return {
         "days": days,
         "timezone": str(zone),
+        "exclude_admins": exclude_admins,
         "totals": {
             "events": len(rows),
             "active_users": len(users),

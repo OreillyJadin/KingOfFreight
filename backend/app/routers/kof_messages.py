@@ -42,5 +42,5 @@ def send(
         raise HTTPException(422, "Message must not be blank")
     result = send_message(db, order_no, body.recipient, body.body, sms)
     if result["status"] == "sent":
-        feature_event(request, "kof_text_send")
+        feature_event(request, "kof_text_send", {"order_no": order_no})
     return result
