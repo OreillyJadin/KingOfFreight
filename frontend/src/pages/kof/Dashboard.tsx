@@ -21,20 +21,20 @@ import { compactMoney, money, monthDay, pct, shortDate } from "../../kof/format"
 import { RangeTabs, useRange } from "../../kof/useRange";
 
 export default function Dashboard() {
-  const { value, setValue, range, label, month, year, setMonth, setYear } =
-    useRange("month");
+  const { value, setValue, range, label, month, year, setMonth, setYear, today, shiftPeriod, canNext } =
+    useRange("month", true);
   const [params, setParams] = useSearchParams();
   const intervalParam = params.get("interval");
-  const interval =
+  const interval = value === "day" || value === "week" ? "day" :
     intervalParam === "week" || intervalParam === "month"
       ? intervalParam
       : value === "month"
         ? "week"
         : "month";
-  const tableYear = value === "month" ? Number(month.slice(0, 4)) : year;
+  const tableYear = value === "month" ? Number(month.slice(0, 4)) : value === "day" || value === "week" ? Number(range.start?.slice(0, 4)) : year;
   const tableRange =
     value === "all"
-      ? { start: "2000-01-01" }
+      ? { start: "2000-01-01", end: today }
       : { start: `${tableYear}-01-01`, end: `${tableYear}-12-31` };
 
   useEffect(() => {
@@ -83,10 +83,10 @@ export default function Dashboard() {
 
   function selectMonth(nextMonth: string) {
     const updated = new URLSearchParams(params);
-    const now = new Date();
-    const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+    const currentMonth = today.slice(0, 7);
     updated.delete("range");
-    updated.delete("period");
+    updated.set("period", "month");
+    try { localStorage.setItem("dashboard-period", "month"); } catch { /* Storage may be unavailable. */ }
     if (nextMonth === currentMonth) updated.delete("month");
     else updated.set("month", nextMonth);
     setParams(updated, { replace: true });
@@ -109,6 +109,7 @@ export default function Dashboard() {
           year={year}
           setMonth={setMonth}
           setYear={setYear}
+          daily={{ label, today, shiftPeriod, canNext }}
         />
       }
     />
@@ -218,18 +219,18 @@ export default function Dashboard() {
         )}
       </Card>
 
-      <Card className="mt-5 p-4 sm:p-5">
+      {value !== "day" && <Card className="mt-5 p-4 sm:p-5">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-bold text-fg">Freight cost, carrier cost and profit</h2>
-          <Tabs
+          {value !== "week" && <Tabs
             ariaLabel="Chart interval"
-            value={interval}
+            value={interval === "day" ? "week" : interval}
             onChange={setInterval}
             items={[
               { value: "week", label: "Weekly" },
               { value: "month", label: "Monthly" },
             ]}
-          />
+          />}
         </div>
         {summary.isPending ? (
           <TableSkeleton rows={5} />
@@ -243,7 +244,7 @@ export default function Dashboard() {
             }
           />
         )}
-      </Card>
+      </Card>}
 
       <div className="mt-5 grid gap-5 xl:grid-cols-2">
         <Card className="min-w-0 overflow-hidden">

@@ -168,6 +168,8 @@ def _on_time_percent(numerator, denominator) -> float | None:
 
 
 def _period_expression(interval: str, dialect: str):
+    if interval == "day":
+        return KofLoad.date_of_sale
     if dialect == "postgresql":
         return cast(func.date_trunc(interval, KofLoad.date_of_sale), String)
     if interval == "month":
@@ -768,7 +770,7 @@ def sales(db: Session = Depends(get_db)) -> dict:
 def summary(
     start: date | None = None,
     end: date | None = None,
-    interval: Literal["week", "month"] = "week",
+    interval: Literal["day", "week", "month"] = "week",
     db: Session = Depends(get_db),
 ) -> dict:
     start_date, end_date, filters = _date_filters(start, end)

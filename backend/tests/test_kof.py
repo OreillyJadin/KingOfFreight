@@ -1204,6 +1204,50 @@ def test_kof_api_contract_shapes(client, db, monkeypatch):
     assert client.post("/api/kof/sync?kind=full").status_code == 400
 
 
+def test_summary_daily_buckets_and_inclusive_week(client, db):
+    for index, day in enumerate((1, 2, 2, 8, 9)):
+        _seed_kof_load(
+            db,
+            order_no=800100 + index,
+            date_of_sale=date(2026, 11, day),
+            customer="Synthetic Customer",
+            carrier="Synthetic Carrier",
+            stage="delivered",
+            price=Decimal("1000"),
+            cost=Decimal("700"),
+            profit=Decimal("300"),
+        )
+    db.add(KofLoad(order_no=800200, date_of_sale=None))
+    db.add(KofLoad(order_no=800201, date_of_sale=date(2026, 11, 3), is_deleted=True))
+    db.commit()
+    response = client.get(
+        "/api/kof/summary?start=2026-11-02&end=2026-11-08&interval=day"
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["totals"]["loads"] == 3
+    assert [(row["period"], row["loads"], row["profit"]) for row in body["series"]] == [
+        ("2026-11-02", 2, 600),
+        ("2026-11-08", 1, 300),
+    ]
+    day = client.get(
+        "/api/kof/summary?start=2026-11-02&end=2026-11-02&interval=day"
+    ).json()
+    assert day["totals"]["loads"] == 2
+    empty = client.get(
+        "/api/kof/summary?start=2026-11-04&end=2026-11-04&interval=day"
+    ).json()
+    assert empty["series"] == []
+    assert empty["totals"]["loads"] == 0
+    assert (
+        client.get(
+            "/api/kof/summary?start=2026-11-08&end=2026-11-02&interval=day"
+        ).status_code
+        == 422
+    )
+    assert client.get("/api/kof/summary?interval=invalid").status_code == 422
+
+
 def test_summary_month_series_includes_per_month_averages(client, db):
     today = date.today()
     current_month_start = today.replace(day=1)
