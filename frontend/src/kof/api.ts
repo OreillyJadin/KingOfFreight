@@ -248,7 +248,7 @@ export const kof = {
   disconnect: () => request<void>("/kof/connection", { method: "DELETE" }),
   startSync: (kind: "incremental" | "full") =>
     request<{ started: boolean }>(`/kof/sync${qs({ kind })}`, { method: "POST" }),
-  summary: (range: DateRange, interval: "week" | "month") =>
+  summary: (range: DateRange, interval: "day" | "week" | "month") =>
     request<KofSummary>(`/kof/summary${qs({ ...range, interval })}`),
   lanes: (
     range: DateRange,
