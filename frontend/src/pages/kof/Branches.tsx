@@ -7,7 +7,7 @@ import { ErrorState, PageHeading } from "../../components/common";
 import { ListDetail } from "../../components/ListDetail";
 import { Badge, Card, Input, Skeleton } from "../../components/ui";
 import { CountCell, DataTable, MarginCell, MoneyCell, TableSkeleton } from "../../kof/components";
-import { money, pct, place, shortDate, stageClass, stageLabels } from "../../kof/format";
+import { money, place, shortDate, stageClass, stageLabels } from "../../kof/format";
 import { RangeTabs, useRange, type RangeValue } from "../../kof/useRange";
 
 function Stat({ label, value }: { label: string; value: string }) {
@@ -56,11 +56,10 @@ function BranchDetail({ branch, range }: { branch: string; range: { start?: stri
         )}
       </div>
 
-      <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <dl className="grid grid-cols-3 gap-3">
         <Stat label="Loads" value={String(t.loads)} />
         <Stat label="Avg rate" value={money(t.avg_price)} />
-        <Stat label="Avg carrier cost" value={money(t.avg_cost)} />
-        <Stat label="Margin" value={pct(t.margin_pct)} />
+        <Stat label="Total profit" value={money(t.profit)} />
       </dl>
 
       <section>
@@ -181,8 +180,8 @@ export default function Branches() {
     [branches.data, needle],
   );
   const totals = rows.reduce(
-    (acc, row) => ({ loads: acc.loads + row.loads, revenue: acc.revenue + row.revenue, cost: acc.cost + row.cost }),
-    { loads: 0, revenue: 0, cost: 0 },
+    (acc, row) => ({ loads: acc.loads + row.loads, revenue: acc.revenue + row.revenue, profit: acc.profit + row.profit }),
+    { loads: 0, revenue: 0, profit: 0 },
   );
 
   function update(changes: Record<string, string | null>) {
@@ -221,8 +220,12 @@ export default function Branches() {
             },
             { key: "loads", header: "Loads", align: "right", render: (row) => <CountCell value={row.loads} /> },
             { key: "rate", header: "Avg rate", align: "right", render: (row) => <MoneyCell value={row.avg_price} /> },
-            { key: "cost", header: "Avg carrier cost", align: "right", render: (row) => <MoneyCell value={row.avg_cost} /> },
-            { key: "margin", header: "Margin", align: "right", render: (row) => <MarginCell value={row.margin_pct} /> },
+            {
+              key: "profit",
+              header: "Total profit",
+              align: "right",
+              render: (row) => <span className="font-semibold text-fg"><MoneyCell value={row.profit} /></span>,
+            },
           ]}
         />
       )}
@@ -234,7 +237,7 @@ export default function Branches() {
       <PageHeading
         eyebrow="Accounts"
         title="Branches"
-        description={`Every ${customer === "united rentals" ? "United Rentals" : "customer"} branch you haul for, with average rate and cost. ${label}.`}
+        description={`Every ${customer === "united rentals" ? "United Rentals" : "customer"} branch you haul for, with average rate and total profit. ${label}.`}
         action={
           <RangeTabs
             value={value}
@@ -264,8 +267,8 @@ export default function Branches() {
           <p className="text-sm text-muted">
             <span className="tabular-nums text-fg-2">{rows.length}</span> branches ·{" "}
             <span className="tabular-nums text-fg-2">{totals.loads.toLocaleString()}</span> loads · avg rate{" "}
-            <span className="tabular-nums text-fg-2">{money(totals.loads ? totals.revenue / totals.loads : null)}</span> · avg cost{" "}
-            <span className="tabular-nums text-fg-2">{money(totals.loads ? totals.cost / totals.loads : null)}</span>
+            <span className="tabular-nums text-fg-2">{money(totals.loads ? totals.revenue / totals.loads : null)}</span> · total profit{" "}
+            <span className="tabular-nums text-fg-2">{money(totals.profit)}</span>
           </p>
         )}
       </div>
